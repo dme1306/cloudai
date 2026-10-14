@@ -1,10 +1,66 @@
 /* ═══════════════════════════════════════════════════════════════════
    ai.js — replaces Code.gs
    • Fast local answer engine runs in the browser (instant, no API call)
-   • Anything else goes to the Cloudflare Worker (/ai), which holds the Groq key
+   • Everything else calls Groq directly from the browser (key in js/config.js)
    ═══════════════════════════════════════════════════════════════════ */
 
 const _aiCache = new Map();
+
+const AI_SYSTEM =
+  'You are a financial analyst embedded in an expense dashboard. ' +
+  'Answer using ONLY the numbers in the data. Never invent values. ' +
+  'Format amounts as Indian rupees with ₹ and commas. ' +
+  'Be concise — 2 to 4 short lines. Use **bold** for key figures. ' +
+  'No markdown tables. Use short lines and dashes. ' +
+  'If the answer is not derivable, say so in one line.';
+
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
+function extractGroqAnswer_(json) {
+  var c = json.choices && json.choices[0];
+  if (c) {
+    var m = c.message || {};
+    if (typeof m.content === 'string' && m.content.trim()) return m.content.trim();
+    if (Array.isArray(m.content)) {
+      var j = m.content.map(function (p) { return (p && p.text) || ''; }).join('').trim();
+      if (j) return j;
+    }
+    if (typeof m.reasoning === 'string' && m.reasoning.trim()) return m.reasoning.trim();
+    if (typeof c.text === 'string' && c.text.trim()) return c.text.trim();
+  }
+  if (typeof json.content === 'string' && json.content.trim()) return json.content.trim();
+  if (typeof json.output === 'string' && json.output.trim()) return json.output.trim();
+  return '';
+}
+
+async function callGroqAPI_(model, prompt) {
+  var resp, text;
+  try {
+    resp = await fetch(GROQ_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + window.APP_CONFIG.GROQ_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: model, temperature: 0.2, max_tokens: 800,
+        messages: [{ role: 'system', content: AI_SYSTEM }, { role: 'user', content: prompt }]
+      })
+    });
+    text = await resp.text();
+  } catch (e) {
+    return { ok: false, error: 'Network: ' + (e.message || e) };
+  }
+  if (!resp.ok) {
+    return { ok: false, quota: resp.status === 429,
+             tooLarge: /too large|context length|tokens per minute|TPM/i.test(text),
+             error: 'API ' + resp.status + ': ' + text.slice(0, 250) };
+  }
+  var json;
+  try { json = JSON.parse(text); } catch (e) { return { ok: true, answer: text.slice(0, 2000) }; }
+  var answer = extractGroqAnswer_(json);
+  return answer ? { ok: true, answer: answer } : { ok: false, error: 'Empty response: ' + text.slice(0, 200) };
+}
 
 /* Same signature as the Apps Script version, but returns a Promise */
 async function askGemini(question, records, skipFast) {
@@ -12,45 +68,35 @@ async function askGemini(question, records, skipFast) {
   if (!records || !records.length) return 'No expense data available. Please refresh.';
 
   if (!skipFast) {
-    const fast = tryFastAnswer_(question, records);
+    var fast = tryFastAnswer_(question, records);
     if (fast) return fast;
   }
 
-  const key = question + '|' + records.length;
-  const hit = _aiCache.get(key);
+  var key = question + '|' + records.length;
+  var hit = _aiCache.get(key);
   if (hit && Date.now() - hit.t < 5 * 60 * 1000) return hit.a;
 
-  let res, data;
-  try {
-    res = await fetch(window.APP_CONFIG.AI_PROXY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        question: question,
-        snapshot: buildRichSnapshot_(records),
-        minimal: buildMinimalSnapshot_(records)
-      })
-    });
-    data = await res.json().catch(function () { return {}; });
-  } catch (e) {
-    return 'The AI service is unreachable. Please check your connection and try again.\n\n_Technical: ' +
-           String(e.message || e).substring(0, 200) + '_';
+  var cfg = window.APP_CONFIG;
+  var full    = 'DATA: ' + JSON.stringify(buildRichSnapshot_(records))    + '\nQ: ' + question;
+  var minimal = 'DATA: ' + JSON.stringify(buildMinimalSnapshot_(records)) + '\nQ: ' + question;
+  var lastError = '';
+
+  for (var model of [cfg.PRIMARY_MODEL, cfg.FALLBACK_MODEL]) {
+    var r = await callGroqAPI_(model, full);
+    if (!r.ok && r.tooLarge) r = await callGroqAPI_(model, minimal);
+    if (r.ok) { _aiCache.set(key, { a: r.answer, t: Date.now() }); return r.answer; }
+    lastError = r.error;
+    if (r.quota) break;
   }
 
-  if (!res.ok || !data.answer) {
-    const err = (data && data.error) || ('HTTP ' + res.status);
-    if (/429|rate|quota|tokens per minute|TPM/i.test(err)) {
-      return '⚠️ **Free-tier limit reached.** Please wait about 30 seconds and try again.\n\n' +
-             '**Meanwhile, these are answered instantly without AI:**\n' +
-             '— Total spend this year\n— Highest month for Chiros\n— Top 5 categories\n' +
-             '— Top 5 vendors\n— Compare Crius vs Chiros\n— Average transaction';
-    }
-    return 'The AI service is busy. Please try again in a moment.\n\n_Technical: ' +
-           String(err).substring(0, 200) + '_';
+  if (/429|rate|quota|tokens per minute|TPM/i.test(lastError)) {
+    return '⚠️ **Free-tier limit reached.** Please wait about 30 seconds and try again.\n\n' +
+           '**Meanwhile, these are answered instantly without AI:**\n' +
+           '— Total spend this year\n— Highest month for Chiros\n— Top 5 categories\n' +
+           '— Top 5 vendors\n— Compare Crius vs Chiros\n— Average transaction';
   }
-
-  _aiCache.set(key, { a: data.answer, t: Date.now() });
-  return data.answer;
+  return 'The AI service is busy. Please try again in a moment.\n\n_Technical: ' +
+         String(lastError).substring(0, 200) + '_';
 }
 
 /* ═══════════════════════════════════════════════════════════════════
