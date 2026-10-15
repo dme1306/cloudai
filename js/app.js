@@ -1378,6 +1378,63 @@ function renderSavingsOpportunities(recs) {
     }
   }
 
+  // Always provide useful guidance for a single selected year as well as multi-year views.
+  // These findings use only the records currently selected in the report.
+  if (acctSorted.length && total > 0) {
+    const [topAcctName, topAcctSpend] = acctSorted[0];
+    const share = topAcctSpend / total * 100;
+    opps.push({
+      sev: share >= 35 ? 'high' : (share >= 20 ? 'med' : 'low'),
+      tag: 'Largest Account',
+      icon: '🏆',
+      title: esc(topAcctName) + ' is the highest-spend account',
+      amt: topAcctSpend * 0.05,
+      metrics: [
+        { label: 'Account spend', value: money(topAcctSpend) },
+        { label: 'Share of selected spend', value: share.toFixed(1) + '%' },
+        { label: 'Total selected spend', value: money(total) },
+        { label: '5% savings target', value: money(topAcctSpend * 0.05), down: true }
+      ],
+      body: '<b>' + esc(topAcctName) + '</b> has the highest spend in the currently selected data at <b>' + money(topAcctSpend) + '</b> (' + share.toFixed(1) + '% of selected spend). A review target of 5% would equal <span class="hl">' + money(topAcctSpend * 0.05) + '</span>; this is a target to investigate, not a guaranteed saving.',
+      actions: [
+        'Review the largest bills and check that each has a matching purchase order and business justification.',
+        'Compare supplier rates and negotiate volume pricing or an annual rate contract.',
+        'Set a monthly budget for this account and investigate any month that exceeds its recent average.'
+      ]
+    });
+  }
+
+  const companySpend = {};
+  recs.forEach(r => {
+    const key = String(r.locationKey || '').toUpperCase() || 'Unknown company';
+    companySpend[key] = (companySpend[key] || 0) + r.expenseAmount;
+  });
+  const companySorted = Object.entries(companySpend).sort((a, b) => b[1] - a[1]);
+  if (companySorted.length && total > 0) {
+    const [companyKey, companyAmount] = companySorted[0];
+    const share = companyAmount / total * 100;
+    const companyName = COMPANY_NAMES[companyKey] || companyKey;
+    opps.push({
+      sev: share >= 60 ? 'high' : (share >= 35 ? 'med' : 'low'),
+      tag: 'Company Spend',
+      icon: '🏢',
+      title: esc(companyName) + ' has the highest spend in this selection',
+      amt: companyAmount * 0.03,
+      metrics: [
+        { label: 'Company spend', value: money(companyAmount) },
+        { label: 'Share of selected spend', value: share.toFixed(1) + '%' },
+        { label: 'Transactions', value: fmt.format(recs.filter(r => String(r.locationKey || '').toUpperCase() === companyKey).length) },
+        { label: '3% review target', value: money(companyAmount * 0.03), down: true }
+      ],
+      body: '<b>' + esc(companyName) + '</b> accounts for <b>' + money(companyAmount) + '</b> of the currently selected records. Review this company\'s highest-value accounts and recurring costs first. A 3% review target is <span class="hl">' + money(companyAmount * 0.03) + '</span>, not a guaranteed saving.',
+      actions: [
+        'Sort this company\'s account groups by total spend and review the top three with their budget owners.',
+        'Compare recurring expense lines with the other selected companies where comparable.',
+        'Agree monthly limits for discretionary expenses and review variances each month.'
+      ]
+    });
+  }
+
   const agg = rptYearlyAgg(recs);
   const years = agg.years, map = agg.map;
   if (years.length >= 2) {
