@@ -25,6 +25,8 @@ let reportYears = [];
 let reportAllYears = [];
 const ALL_COMPANIES = ['CRIUS', 'CHIROS', 'CRIUS FND'];
 let reportCompanies = [];            // applied
+let reportFYSel = 'ALL';             // Report tab dropdown: 'ALL' or a single FY
+let reportLocSel = '';               // Report tab dropdown: '' (all) or one company key
 let reportGroups = new Set();        // applied expense-type selection (Particulars)
 let reportAccts  = new Set();        // applied expense-type selection (A/C names)
 let pendingGroups = new Set();       // selected in the table, not applied yet
@@ -206,72 +208,55 @@ function getReportRecords(applyTypes) {
   });
 }
 
+/* Report tab uses the same dropdowns as the Expense Overview: one FY (or All Years) + one company (or All). */
+function syncReportSelection() {
+  reportYears = (reportFYSel === 'ALL') ? reportAllYears.slice() : [Number(reportFYSel)];
+  reportCompanies = reportLocSel ? [reportLocSel] : ALL_COMPANIES.slice();
+}
 function initReportFilters() {
-  if (!reportCompanies.length) reportCompanies = ALL_COMPANIES.slice();
+  if (reportFYSel !== 'ALL' && reportAllYears.indexOf(Number(reportFYSel)) === -1) reportFYSel = 'ALL';
+  syncReportSelection();
   renderReportFilterUI();
 }
+function reportFiltersActive() { return reportFYSel !== 'ALL' || !!reportLocSel; }
+function resetReportFilters() { reportFYSel = 'ALL'; reportLocSel = ''; syncReportSelection(); renderReport(); }
 
-/* Chips select instantly (no Apply button). The summary bar below them is frozen on scroll. */
+/* The summary bar below the dropdowns is frozen on scroll. */
 function renderReportFilterUI() {
-  const yEl = document.getElementById('yearFilterChips');
-  const cEl = document.getElementById('companyFilterChips');
-  if (!yEl || !cEl) return;
+  const fySel = document.getElementById('rptFySelector');
+  const locSel = document.getElementById('rptLocFilter');
+  if (!fySel || !locSel) return;
 
-  yEl.innerHTML = reportAllYears.length ? reportAllYears.map(y => {
-    const on = reportYears.indexOf(y) !== -1;
-    return '<span class="year-chip' + (on ? ' active' : '') + '" data-year="' + y + '" role="button" tabindex="0"><span class="yc-check">' + (on ? '✓' : '+') + '</span> FY ' + y + '</span>';
-  }).join('') : '<span style="color:var(--text-muted);font-size:12px">No years available</span>';
-  yEl.querySelectorAll('.year-chip').forEach(chip => {
-    const go = () => toggleReportYear(parseInt(chip.getAttribute('data-year'), 10));
-    chip.addEventListener('click', go);
-    chip.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
-  });
-
-  cEl.innerHTML = ALL_COMPANIES.map(k => {
-    const on = reportCompanies.indexOf(k) !== -1;
-    const style = on ? ' style="background:' + COMPANY_COLORS[k] + '"' : '';
-    return '<span class="year-chip company-chip' + (on ? ' active' : '') + '" data-company="' + esc(k) + '"' + style + ' role="button" tabindex="0"><span class="yc-check">' + (on ? '✓' : '+') + '</span> ' + esc(COMPANY_NAMES[k]) + '</span>';
-  }).join('');
-  cEl.querySelectorAll('.company-chip').forEach(chip => {
-    const go = () => toggleReportCompany(chip.getAttribute('data-company'));
-    chip.addEventListener('click', go);
-    chip.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
-  });
+  const want = ['ALL'].concat(reportAllYears.map(String)).join('|');
+  const have = Array.from(fySel.options).map(o => o.value).join('|');
+  if (want !== have) {
+    fySel.innerHTML = '<option value="ALL">All Years</option>' +
+      reportAllYears.map(y => '<option value="' + y + '">FY ' + y + '</option>').join('');
+  }
+  fySel.value = reportFYSel;
+  locSel.value = reportLocSel;
+  const rb = document.getElementById('rptResetBtn');
+  if (rb) rb.classList.toggle('is-visible', reportFiltersActive());
 
   /* frozen summary: what is selected right now */
   const ap = document.getElementById('rfApplied');
   if (!ap) return;
-  const tags = arr => arr.length ? arr.map(t => '<span class="rf-tag">' + esc(t) + '</span>').join('') : '<span class="rf-tag none">none selected</span>';
-  const yrs = reportYears.slice().sort((a, b) => a - b).map(y => 'FY ' + y);
-  const cos = reportCompanies.map(k => COMPANY_NAMES[k] || k);
+  const tag = t => '<span class="rf-tag">' + esc(t) + '</span>';
+  const yrs = reportFYSel === 'ALL' ? 'All years' : 'FY ' + reportFYSel;
+  const cos = reportLocSel ? (COMPANY_NAMES[reportLocSel] || reportLocSel) : 'All companies';
   const typeNames = Array.from(reportGroups).concat(Array.from(reportAccts));
-  let typeHtml = '<span class="rf-tag">All expense types</span>';
+  let typeHtml = tag('All expense types');
   if (typeNames.length) {
-    const shown = typeNames.slice(0, 3).map(t => '<span class="rf-tag">' + esc(t.length > 28 ? t.slice(0, 26) + '…' : t) + '</span>').join('');
-    typeHtml = shown + (typeNames.length > 3 ? '<span class="rf-tag">+' + (typeNames.length - 3) + ' more</span>' : '');
+    const shown = typeNames.slice(0, 3).map(t => tag(t.length > 28 ? t.slice(0, 26) + '…' : t)).join('');
+    typeHtml = shown + (typeNames.length > 3 ? tag('+' + (typeNames.length - 3) + ' more') : '');
   }
   const n = getReportRecords(true).length;
   ap.innerHTML =
-    '<span class="rf-group"><span class="rf-glabel">Years</span>' + tags(yrs) + '</span>' +
-    '<span class="rf-group"><span class="rf-glabel">Companies</span>' + tags(cos) + '</span>' +
+    '<span class="rf-group"><span class="rf-glabel">Year</span>' + tag(yrs) + '</span>' +
+    '<span class="rf-group"><span class="rf-glabel">Company</span>' + tag(cos) + '</span>' +
     '<span class="rf-group"><span class="rf-glabel">Expense types</span>' + typeHtml + '</span>' +
     '<span class="rf-count">' + fmt.format(n) + ' transactions</span>';
 }
-function toggleReportYear(y) {
-  const i = reportYears.indexOf(y);
-  if (i === -1) reportYears.push(y); else reportYears.splice(i, 1);
-  reportYears.sort((a, b) => a - b);
-  renderReport();
-}
-function toggleReportCompany(k) {
-  const i = reportCompanies.indexOf(k);
-  if (i === -1) reportCompanies.push(k); else reportCompanies.splice(i, 1);
-  renderReport();
-}
-function selectAllReportYears() { reportYears = reportAllYears.slice(); renderReport(); }
-function clearReportYears()     { reportYears = []; renderReport(); }
-function selectAllCompanies()   { reportCompanies = ALL_COMPANIES.slice(); renderReport(); }
-function clearCompanies()       { reportCompanies = []; renderReport(); }
 
 /* ── expense-type selection (Looker-style cross filter) ── */
 function refreshExpSelClasses() {
@@ -444,10 +429,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 'k') { e.preventDefault(); openCommandPalette(); }
   });
 
-  const selAll = document.getElementById('yfSelectAll');
-  const clrAll = document.getElementById('yfClearAll');
-  if (selAll) selAll.addEventListener('click', selectAllReportYears);
-  if (clrAll) clrAll.addEventListener('click', clearReportYears);
+  const rptFy = document.getElementById('rptFySelector');
+  const rptLoc = document.getElementById('rptLocFilter');
+  const rptRst = document.getElementById('rptResetBtn');
+  if (rptFy)  rptFy.addEventListener('change', function () { reportFYSel = this.value || 'ALL'; syncReportSelection(); renderReport(); });
+  if (rptLoc) rptLoc.addEventListener('change', function () { reportLocSel = this.value || ''; syncReportSelection(); renderReport(); });
+  if (rptRst) rptRst.addEventListener('click', resetReportFilters);
 
   const unifiedCsv = document.getElementById('rptUnifiedCsvBtn');
   if (unifiedCsv) unifiedCsv.addEventListener('click', exportUnifiedComparisonCSV);
@@ -469,8 +456,6 @@ function loadInitial(isRefresh) {
       const years = [...new Set(allRecords.map(r => Number(r.financialYear)))].filter(y => y).sort((a,b) => a-b);
       populateFY(years);
       reportAllYears = years.slice();
-      if (!reportYears.length) reportYears = reportAllYears.slice(-4);
-      else { reportYears = reportYears.filter(y => reportAllYears.indexOf(y) !== -1); if (!reportYears.length) reportYears = reportAllYears.slice(-4); }
       initReportFilters();
       const stamp = new Date().toLocaleString('en-IN');
       document.getElementById('lastUpdate').textContent = 'Updated ' + stamp;
@@ -1093,7 +1078,7 @@ function renderUnifiedComparison(recs) {
   const head = document.getElementById('rptUnifiedHead'), body = document.getElementById('rptUnifiedBody'), foot = document.getElementById('rptUnifiedFoot'), sub = document.getElementById('rptUnifiedSub');
   if (!head || !body) return;
   const yearsInScope = reportYears.slice().sort((a, b) => a - b);
-  if (!yearsInScope.length || !recs.length) { head.innerHTML = ''; body.innerHTML = '<tr><td style="text-align:center;padding:40px;color:var(--text-muted)">Select at least one financial year chip above to see the comparison.</td></tr>'; if (foot) foot.innerHTML = ''; if (sub) sub.textContent = 'No years selected.'; return; }
+  if (!yearsInScope.length || !recs.length) { head.innerHTML = ''; body.innerHTML = '<tr><td style="text-align:center;padding:40px;color:var(--text-muted)">No data for the current selection.</td></tr>'; if (foot) foot.innerHTML = ''; if (sub) sub.textContent = 'No years selected.'; return; }
   const acctMap = {};
   recs.forEach(r => {
     const y = Number(r.financialYear); if (!y) return;
@@ -1955,8 +1940,6 @@ document.addEventListener('DOMContentLoaded', function () {
    ═══════════════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', function () {
   const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
-  on('cfSelectAll', selectAllCompanies);
-  on('cfClearAll', clearCompanies);
   on('rfJump', function () { window.scrollTo({ top: 0, behavior: 'smooth' }); });
   on('expApplyBtn', applyExpSelection);
   on('expClearBtn', clearExpSelection);
