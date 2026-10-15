@@ -31,16 +31,8 @@
 
     <div class="toolbar">
       <div class="update-stamp"><span class="pulse-dot"></span><span id="lastUpdate">Loading…</span></div>
-      <div class="field" id="fyField"><label>FY</label><select id="fySelector"><option value="ALL">All Years</option></select></div>
-      <div class="field" id="locField">
-        <label>Company</label>
-        <select id="locFilter">
-          <option value="">All Companies</option>
-          <option value="CRIUS">Crius</option>
-          <option value="CHIROS">Chiros</option>
-          <option value="CRIUS FND">CRIUS FND</option>
-        </select>
-      </div>
+      <div class="field" id="fyField"><label>FY</label><div id="fyMs"></div></div>
+      <div class="field" id="locField"><label>Company</label><div id="locMs"></div></div>
       <button id="resetBtn" class="btn-reset" title="Reset all filters"><span class="reset-icon">⟲</span> Reset</button>
       <button id="refreshBtn" class="btn-icon" title="Refresh from server">↻</button>
       <button id="themeToggle" class="btn-icon" title="Toggle theme">🌙</button>
@@ -169,16 +161,8 @@
 
   <div class="report-filter-bar" id="yearFilterBar">
     <div class="toolbar">
-      <div class="field"><label>FY</label><select id="rptFySelector"><option value="ALL">All Years</option></select></div>
-      <div class="field">
-        <label>Company</label>
-        <select id="rptLocFilter">
-          <option value="">All Companies</option>
-          <option value="CRIUS">Crius</option>
-          <option value="CHIROS">Chiros</option>
-          <option value="CRIUS FND">CRIUS FND</option>
-        </select>
-      </div>
+      <div class="field"><label>FY</label><div id="rptFyMs"></div></div>
+      <div class="field"><label>Company</label><div id="rptLocMs"></div></div>
       <button id="rptResetBtn" class="btn-reset" type="button" title="Reset filters"><span class="reset-icon">⟲</span> Reset</button>
     </div>
   </div>
