@@ -384,12 +384,24 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-body);
   background: var(--surface);
   text-align: left;
   font-weight: 600;
-  min-width: 220px;
-  max-width: 300px;
+  width: 240px;
+  min-width: 190px;
+  max-width: 260px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
   z-index: 4;
   border-right: 2px solid var(--border-strong);
-  padding: 9px 16px;
+  padding: 9px 12px;
   box-shadow: 6px 0 10px -8px rgba(15,23,42,.15);
+}
+.exp-table .exp-type-col .sel-box {
+  flex: 0 0 16px;
+}
+.exp-table .group-row > td.exp-type-col,
+.exp-table .acct-row > td.exp-type-col {
+  overflow-wrap: anywhere;
+  line-height: 1.4;
 }
 .exp-table thead .exp-type-col {
   z-index: 6;
