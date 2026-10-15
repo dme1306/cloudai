@@ -184,11 +184,12 @@
         <button class="yf-btn" type="button" id="cfClearAll">Clear</button>
       </div>
     </div>
-    <div class="rf-row rf-apply-row">
-      <div class="rf-applied" id="rfApplied"></div>
-      <span class="rf-pending d-none" id="rfPending">● Unapplied changes</span>
-      <button class="btn-apply" type="button" id="rfApplyBtn">Apply filters</button>
-    </div>
+  </div>
+
+  <!-- Frozen summary: stays visible under the header while scrolling -->
+  <div class="rf-sticky" id="rfSticky">
+    <div class="rf-applied" id="rfApplied"></div>
+    <button class="rf-jump" type="button" id="rfJump" title="Back to the filters">↑ Change filters</button>
   </div>
 
   <div class="section-title">What the numbers say</div>
