@@ -167,6 +167,9 @@
     <div class="rf-applied" id="rfApplied"></div>
   </div>
 
+  <div class="section-title">What the numbers say</div>
+  <div class="panel mb-4"><div class="panel-body"><div id="insightList" class="insight-facts-grid"></div></div></div>
+
   <div class="section-title">Expense Analysis</div>
   <div class="panel mb-4">
     <div class="panel-head">
@@ -194,18 +197,16 @@
     </div></div>
   </div>
 
-  <div class="section-title">What the numbers say</div>
-  <div class="panel mb-4"><div class="panel-body"><div id="insightList" class="insight-facts-grid"></div></div></div>
-
   <div class="section-title">Areas to Save — Savings Opportunities</div>
   <div class="panel mb-4">
-    <div class="panel-head">
+    <div class="panel-head savings-generator-head">
       <div>
-        <h3 class="panel-title">Where You Can Save Money</h3>
-        <p class="panel-sub" id="rptSavingsSub">Detailed, actionable savings plans generated from your expense data</p>
+        <h3 class="panel-title">Where Can We Save?</h3>
+        <p class="panel-sub" id="rptSavingsSub">Generate a data-based solution for the selected financial year, companies and account groups.</p>
       </div>
+      <button type="button" class="btn-apply gen-btn" data-gen="savings">✨ Generate solution</button>
     </div>
-    <div class="panel-body"><div class="rpt-opp-grid" id="rptSavingsGrid"></div></div>
+    <div class="panel-body" id="rptSavingsResults" hidden><div class="rpt-opp-grid" id="rptSavingsGrid"></div></div>
   </div>
 
   <div class="section-title">Yearly Review — Variances &amp; Alerts</div>
