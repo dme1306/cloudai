@@ -994,30 +994,26 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-body);
 }
 
 
-/* ── Strong contrast for the currently sorted column ── */
+/* ── Color only the sort indicator; never highlight the column header ── */
 .dt thead th.sort-asc,
 .dt thead th.sort-desc,
 .pivot-table thead th.sort-asc,
 .pivot-table thead th.sort-desc,
 .pivot-table th.sort-asc,
 .pivot-table th.sort-desc {
-  color: #fff !important;
-  background: #4f46e5 !important;
-  box-shadow: inset 0 -3px 0 #312e81;
-  border-bottom-color: #4f46e5 !important;
+  color: inherit !important;
+  background: var(--surface-2) !important;
+  box-shadow: none !important;
+  border-bottom-color: var(--border-strong) !important;
 }
 .dt thead th.sort-asc::after,
 .dt thead th.sort-desc::after,
-.pivot-table thead th.sort-asc::after,
-.pivot-table thead th.sort-desc::after,
+.dt thead th[data-fkey]::after,
+.dt thead th[data-mkey]::after,
 .pivot-table th.sort-asc::after,
-.pivot-table th.sort-desc::after {
-  color: #fff !important;
-  opacity: 1;
-}
-.dt thead th.sort-asc:hover,
-.dt thead th.sort-desc:hover,
-.pivot-table th.sort-asc:hover,
-.pivot-table th.sort-desc:hover {
-  background: #4338ca !important;
+.pivot-table th.sort-desc::after,
+.pivot-table th[data-pkey]::after {
+  color: #e879f9 !important;
+  opacity: 1 !important;
+  font-weight: 800;
 }
