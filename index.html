@@ -168,21 +168,18 @@
 <main class="page d-none" id="reportPage">
 
   <div class="report-filter-bar" id="yearFilterBar">
-    <div class="rf-row">
-      <span class="yf-label">Financial Years</span>
-      <div class="yf-chips" id="yearFilterChips"></div>
-      <div class="yf-actions">
-        <button class="yf-btn" type="button" id="yfSelectAll">Select all</button>
-        <button class="yf-btn" type="button" id="yfClearAll">Clear</button>
+    <div class="toolbar">
+      <div class="field"><label>FY</label><select id="rptFySelector"><option value="ALL">All Years</option></select></div>
+      <div class="field">
+        <label>Company</label>
+        <select id="rptLocFilter">
+          <option value="">All Companies</option>
+          <option value="CRIUS">Crius</option>
+          <option value="CHIROS">Chiros</option>
+          <option value="CRIUS FND">CRIUS FND</option>
+        </select>
       </div>
-    </div>
-    <div class="rf-row">
-      <span class="yf-label">Companies</span>
-      <div class="yf-chips" id="companyFilterChips"></div>
-      <div class="yf-actions">
-        <button class="yf-btn" type="button" id="cfSelectAll">Select all</button>
-        <button class="yf-btn" type="button" id="cfClearAll">Clear</button>
-      </div>
+      <button id="rptResetBtn" class="btn-reset" type="button" title="Reset filters"><span class="reset-icon">⟲</span> Reset</button>
     </div>
   </div>
 
