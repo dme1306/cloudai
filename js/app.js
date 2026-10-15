@@ -1066,7 +1066,8 @@ function renderReport() {
   renderReportFilterUI();
   renderInsights(filtered);
   renderExpenseAnalysisTable(filtered);
-  renderUnifiedComparison(filtered);
+  // Keep all account groups visible in the selector; the expense table uses the filtered records.
+  renderUnifiedComparison(base);
   renderSavingsSection(filtered);
   renderReviewSection(filtered);
   updateExpSelUI();
@@ -1277,10 +1278,14 @@ function renderUnifiedComparison(recs) {
     '<th data-ukey="chiros" class="sortable' + (rptUnifiedSortKey === 'chiros' ? ' sort-active' : '') + '" style="text-align:right; color:' + COMPANY_COLORS.CHIROS + '">Chiros<span class="rpt-sort-arrow">' + (rptUnifiedSortKey === 'chiros' ? (rptUnifiedSortDir === 'asc' ? '▲' : '▼') : '◇') + '</span></th>' +
     '<th data-ukey="fnd" class="sortable' + (rptUnifiedSortKey === 'fnd' ? ' sort-active' : '') + '" style="text-align:right; color:' + COMPANY_COLORS['CRIUS FND'] + '">Crius FND<span class="rpt-sort-arrow">' + (rptUnifiedSortKey === 'fnd' ? (rptUnifiedSortDir === 'asc' ? '▲' : '▼') : '◇') + '</span></th>' +
   '</tr>';
+  const selectedUnifiedAccount = reportAccts.size === 1 ? Array.from(reportAccts)[0] : null;
+  const hasUnifiedSelection = !!selectedUnifiedAccount;
   body.innerHTML = rows.map(r => {
+    const isSelected = selectedUnifiedAccount === r.name;
+    const rowClass = hasUnifiedSelection ? (isSelected ? ' class="unified-selected"' : ' class="unified-dim"') : '';
     const growthHtml = (r.growth === null || !isFinite(r.growth)) ? '<span style="color:var(--text-faint)">—</span>' : '<span style="color:' + (r.growth >= 0 ? 'var(--rose)' : 'var(--emerald)') + '; font-weight:700">' + (r.growth >= 0 ? '▲' : '▼') + ' ' + Math.abs(r.growth).toFixed(1) + '%</span>';
-    return '<tr>' +
-      '<td><div class="clamp" title="' + esc(r.name) + '">' + esc(r.name) + '</div></td>' +
+    return '<tr' + rowClass + ' data-unified-account="' + esc(r.name) + '" tabindex="0" role="button" aria-pressed="' + isSelected + '" title="Select ' + esc(r.name) + ' to show its monthly details">' +
+      '<td><div class="clamp unified-account-name" title="' + esc(r.name) + '">' + (isSelected ? '<span class="unified-check">✓</span>' : '<span class="unified-dot"></span>') + esc(r.name) + '</div></td>' +
       yearsInScope.map(y => { const v = r.fyTotals[y] || 0; return '<td class="cell-num">' + (v > 0 ? money(v) : '<span style="color:var(--text-faint)">—</span>') + '</td>'; }).join('') +
       '<td class="cell-num" style="font-weight:800;color:var(--accent)">' + money(r.total) + '</td>' +
       '<td class="cell-num">' + growthHtml + '</td>' +
@@ -1298,6 +1303,25 @@ function renderUnifiedComparison(recs) {
   if (foot) foot.innerHTML = '<tr><td style="font-weight:800">TOTAL</td>' + yearTotals.map(v => '<td class="cell-num" style="font-weight:800">' + money(v) + '</td>').join('') + '<td class="cell-num" style="font-weight:800;color:var(--accent)">' + money(grandTotal) + '</td><td class="cell-num">' + growthFoot + '</td><td class="cell-num" style="color:' + COMPANY_COLORS.CRIUS + ';font-weight:800">' + money(locTotals['CRIUS']) + '</td><td class="cell-num" style="color:' + COMPANY_COLORS.CHIROS + ';font-weight:800">' + money(locTotals['CHIROS']) + '</td><td class="cell-num" style="color:' + COMPANY_COLORS['CRIUS FND'] + ';font-weight:800">' + money(locTotals['CRIUS FND']) + '</td></tr>';
   if (sub) sub.textContent = rows.length + ' account group' + (rows.length === 1 ? '' : 's') + ' · ' + yearsInScope.length + ' year' + (yearsInScope.length === 1 ? '' : 's') + ' (' + yearsInScope.map(y => 'FY ' + y).join(', ') + ') · ' + money(grandTotal) + ' total in scope · Click any header to sort';
   head.querySelectorAll('th[data-ukey]').forEach(th => { th.addEventListener('click', () => { const k = th.getAttribute('data-ukey'); if (rptUnifiedSortKey === k) rptUnifiedSortDir = rptUnifiedSortDir === 'asc' ? 'desc' : 'asc'; else { rptUnifiedSortKey = k; rptUnifiedSortDir = (k === 'name') ? 'asc' : 'desc'; } renderUnifiedComparison(recs); }); });
+  function selectUnifiedAccount(row) {
+    if (!row) return;
+    const name = row.getAttribute('data-unified-account');
+    if (!name) return;
+    const alreadySelected = reportAccts.size === 1 && reportAccts.has(name) && reportGroups.size === 0;
+    reportGroups = new Set();
+    pendingGroups = new Set();
+    reportAccts = alreadySelected ? new Set() : new Set([name]);
+    pendingAccts = new Set(reportAccts);
+    renderReport();
+    if (!alreadySelected) {
+      const monthTable = document.getElementById('expAnalysisTable');
+      if (monthTable) monthTable.closest('.panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+  body.querySelectorAll('tr[data-unified-account]').forEach(row => {
+    row.addEventListener('click', () => selectUnifiedAccount(row));
+    row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectUnifiedAccount(row); } });
+  });
 }
 
 function renderSavingsOpportunities(recs) {
