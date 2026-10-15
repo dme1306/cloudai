@@ -992,3 +992,32 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-body);
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+
+/* ── Strong contrast for the currently sorted column ── */
+.dt thead th.sort-asc,
+.dt thead th.sort-desc,
+.pivot-table thead th.sort-asc,
+.pivot-table thead th.sort-desc,
+.pivot-table th.sort-asc,
+.pivot-table th.sort-desc {
+  color: #fff !important;
+  background: #4f46e5 !important;
+  box-shadow: inset 0 -3px 0 #312e81;
+  border-bottom-color: #4f46e5 !important;
+}
+.dt thead th.sort-asc::after,
+.dt thead th.sort-desc::after,
+.pivot-table thead th.sort-asc::after,
+.pivot-table thead th.sort-desc::after,
+.pivot-table th.sort-asc::after,
+.pivot-table th.sort-desc::after {
+  color: #fff !important;
+  opacity: 1;
+}
+.dt thead th.sort-asc:hover,
+.dt thead th.sort-desc:hover,
+.pivot-table th.sort-asc:hover,
+.pivot-table th.sort-desc:hover {
+  background: #4338ca !important;
+}
