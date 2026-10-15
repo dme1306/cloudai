@@ -33,7 +33,10 @@
       <div class="update-stamp"><span class="pulse-dot"></span><span id="lastUpdate">Loading…</span></div>
       <div class="field" id="fyField"><label>FY</label><div id="fyMs"></div></div>
       <div class="field" id="locField"><label>Company</label><div id="locMs"></div></div>
+      <div class="field" id="rptFyField" style="display:none"><label>FY</label><div id="rptFyMs"></div></div>
+      <div class="field" id="rptLocField" style="display:none"><label>Company</label><div id="rptLocMs"></div></div>
       <button id="resetBtn" class="btn-reset" title="Reset all filters"><span class="reset-icon">⟲</span> Reset</button>
+      <button id="rptResetBtn" class="btn-reset" type="button" title="Reset report filters" style="display:none"><span class="reset-icon">⟲</span> Reset</button>
       <button id="refreshBtn" class="btn-icon" title="Refresh from server">↻</button>
       <button id="themeToggle" class="btn-icon" title="Toggle theme">🌙</button>
     </div>
@@ -158,14 +161,6 @@
 </main>
 
 <main class="page d-none" id="reportPage">
-
-  <div class="report-filter-bar" id="yearFilterBar">
-    <div class="toolbar">
-      <div class="field"><label>FY</label><div id="rptFyMs"></div></div>
-      <div class="field"><label>Company</label><div id="rptLocMs"></div></div>
-      <button id="rptResetBtn" class="btn-reset" type="button" title="Reset filters"><span class="reset-icon">⟲</span> Reset</button>
-    </div>
-  </div>
 
   <!-- Frozen summary: stays visible under the header while scrolling -->
   <div class="rf-sticky" id="rfSticky">
