@@ -908,19 +908,31 @@ function renderFYDrawer(query) {
   if (locFilter) fyRecords = fyRecords.filter(r => String(r.locationKey || '').toUpperCase() === locFilter);
   if (!fyRecords.length) { document.getElementById('drawerSub').textContent = '0 records'; document.getElementById('drawerBody').innerHTML = '<div style="text-align:center;padding:60px 20px;font-size:13px;line-height:1.7"><div style="font-size:34px;margin-bottom:14px">📭</div><b style="font-size:14px">No data found for this selection.</b></div>'; return; }
   const monthTotals = {}; let yearTotal = 0;
-  fyRecords.forEach(r => { const m = Number(r.month); if (!m) return; monthTotals[m] = (monthTotals[m] || 0) + r.expenseAmount; yearTotal += r.expenseAmount; });
-  const monthNums = Object.keys(monthTotals).map(Number).sort((a, b) => a - b);
-  const visibleMonths = monthNums.filter(m => { if (!q) return true; const label = (MONTH_ABBR[m-1] + ' ' + targetYear).toLowerCase(); return label.indexOf(q) !== -1 || MONTH_ABBR[m-1].toLowerCase().indexOf(q) !== -1; });
-  const visibleTotal = visibleMonths.reduce((s, m) => s + monthTotals[m], 0);
-  let maxAmt = 1; monthNums.forEach(m => { if (monthTotals[m] > maxAmt) maxAmt = monthTotals[m]; });
+  fyRecords.forEach(r => { const key = monthKey(r); monthTotals[key] = (monthTotals[key] || 0) + r.expenseAmount; yearTotal += r.expenseAmount; });
+  const monthKeys = Object.keys(monthTotals).sort(monthKeySort);
+  const visibleMonths = monthKeys.filter(key => !q || key.toLowerCase().includes(q) || (MONTH_ABBR[(parseMonthYear(key).m || 0) - 1] || '').toLowerCase().includes(q));
+  const visibleTotal = visibleMonths.reduce((sum, key) => sum + monthTotals[key], 0);
+  let maxAmt = 1; monthKeys.forEach(key => { if (monthTotals[key] > maxAmt) maxAmt = monthTotals[key]; });
   const companyLabel = locFilter ? (COMPANY_NAMES[locFilter] || locFilter) : locScopeText();
-  document.getElementById('drawerSub').textContent = monthNums.length + ' month' + (monthNums.length === 1 ? '' : 's') + ' · FY ' + targetYear + ' · ' + companyLabel + ' · ' + fmt.format(fyRecords.length) + ' tx';
+  document.getElementById('drawerSub').textContent = monthKeys.length + ' month' + (monthKeys.length === 1 ? '' : 's') + ' · FY ' + targetYear + ' · ' + companyLabel + ' · ' + fmt.format(fyRecords.length) + ' tx';
   const body = document.getElementById('drawerBody');
   if (!visibleMonths.length) { body.innerHTML = '<p style="color:var(--text-muted);font-size:13px;text-align:center;padding:60px 20px">' + (q ? 'No months match "' + esc(q) + '"' : 'No data available.') + '</p>'; return; }
   let html = '<div class="particular-hero"><div><div class="hero-label">FY ' + targetYear + ' · ' + esc(companyLabel) + '</div><div class="hero-value">' + money(visibleTotal) + '</div></div><div class="hero-badge">📅 ' + visibleMonths.length + ' month' + (visibleMonths.length === 1 ? '' : 's') + '</div></div><div class="drawer-section-header"><span>Month-wise</span><span class="section-total">' + money(visibleTotal) + '</span></div>';
-  visibleMonths.forEach(m => { const amt = monthTotals[m]; const barW = (amt / maxAmt) * 100; const share = yearTotal ? (amt / yearTotal * 100) : 0; const mk = MONTH_ABBR[m-1] + ' ' + targetYear; html += '<div class="drawer-month-row" data-fy-drawer-month="' + esc(mk) + '" data-fy-drawer-m="' + m + '" style="cursor:pointer"><div><div class="month-name"><span class="month-badge">' + MONTH_ABBR[m-1] + '</span> ' + mk + '</div><div class="bar"><div style="width:' + barW.toFixed(2) + '%"></div></div></div><div><div class="amt">' + money(amt) + '</div><div class="pct">' + share.toFixed(1) + '%</div></div></div>'; });
+  visibleMonths.forEach(key => {
+    const amt = monthTotals[key], meta = parseMonthYear(key), monthName = MONTH_ABBR[(meta.m || 0) - 1] || key;
+    const barW = (amt / maxAmt) * 100, share = yearTotal ? (amt / yearTotal * 100) : 0;
+    html += '<div class="drawer-month-row" data-fy-drawer-month="' + esc(key) + '" data-fy-drawer-m="' + (meta.m || '') + '" style="cursor:pointer"><div><div class="month-name"><span class="month-badge">' + esc(monthName) + '</span> ' + esc(key) + '</div><div class="bar"><div style="width:' + barW.toFixed(2) + '%"></div></div></div><div><div class="amt">' + money(amt) + '</div><div class="pct">' + share.toFixed(1) + '%</div></div></div>';
+  });
   body.innerHTML = html;
-  body.querySelectorAll('[data-fy-drawer-month]').forEach(row => { row.addEventListener('click', () => { const mk = row.getAttribute('data-fy-drawer-month'); const m = parseInt(row.getAttribute('data-fy-drawer-m'), 10); const company = locFilter || null; closeDrawer(); setTimeout(() => openDrawer('month', mk, targetYear, m, company), 240); }); });
+  body.querySelectorAll('[data-fy-drawer-month]').forEach(row => {
+    row.addEventListener('click', () => {
+      const mk = row.getAttribute('data-fy-drawer-month');
+      const m = parseInt(row.getAttribute('data-fy-drawer-m'), 10);
+      const company = locFilter || null;
+      closeDrawer();
+      setTimeout(() => openDrawer('month', mk, targetYear, m, company), 240);
+    });
+  });
 }
 function openParticularDrawer(arg1, arg2) {
   drawerMode = 'particular'; drawerParticular = arg1 || ''; drawerParticularYear = arg2; monthDrawerPresetCompany = '';
