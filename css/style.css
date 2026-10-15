@@ -1017,3 +1017,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-body);
   opacity: 1 !important;
   font-weight: 800;
 }
+
+
+/* Inactive sortable columns use a distinct marker; active sort keeps ▲ / ▼ */
+.dt thead th:not(.sort-asc):not(.sort-desc) .sort-arrow,
+.pivot-table thead th:not(.sort-asc):not(.sort-desc) .sort-arrow,
+.rpt-mini-table thead th:not(.sort-active) .rpt-sort-arrow,
+.exp-table thead th.sortable:not(.sort-active) .exp-sort-arrow {
+  color: #0ea5e9 !important;
+  opacity: 1 !important;
+  font-weight: 800;
+}
