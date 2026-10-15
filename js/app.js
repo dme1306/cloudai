@@ -1216,10 +1216,14 @@ function renderExpenseAnalysisTable(recs) {
       bodyHtml += '</tr>';
     });
   });
-  bodyHtml += '<tr class="total-row"><td class="exp-type-col">TOTAL</td>';
-  months.forEach((m, idx) => { const amt = grandByMonth[m]; const prevAmt = idx > 0 ? grandByMonth[months[idx - 1]] : null; bodyHtml += renderAmtChg(amt, prevAmt); });
-  bodyHtml += '<td class="col-amount" style="font-weight:800;color:var(--accent)">' + money(grandTotal) + '</td>';
-  bodyHtml += '</tr></tbody>';
+  const hideSingleSelectionTotal = (reportAccts.size + reportGroups.size) === 1;
+  if (!hideSingleSelectionTotal) {
+    bodyHtml += '<tr class="total-row"><td class="exp-type-col">TOTAL</td>';
+    months.forEach((m, idx) => { const amt = grandByMonth[m]; const prevAmt = idx > 0 ? grandByMonth[months[idx - 1]] : null; bodyHtml += renderAmtChg(amt, prevAmt); });
+    bodyHtml += '<td class="col-amount" style="font-weight:800;color:var(--accent)">' + money(grandTotal) + '</td>';
+    bodyHtml += '</tr>';
+  }
+  bodyHtml += '</tbody>';
   tbl.innerHTML = head1 + bodyHtml;
   if (subEl) { let sortLabel; if (expSortKey === 'type') sortLabel = 'Sorted by <b>Expense Type</b> (' + (expSortDir === 'asc' ? 'A → Z' : 'Z → A') + ')'; else if (expSortKey === 'total') sortLabel = 'Sorted by <b>Grand Total</b> (' + (expSortDir === 'asc' ? 'low → high' : 'high → low') + ')'; else { const [m, f] = expSortKey.split('|'); sortLabel = 'Sorted by <b>' + esc(m) + ' ' + (f === 'amt' ? 'Amount' : '% Change') + '</b> (' + (expSortDir === 'asc' ? 'asc' : 'desc') + ')'; } subEl.innerHTML = months.length + ' month' + (months.length === 1 ? '' : 's') + ' · ' + groupArr.length + ' expense group' + (groupArr.length === 1 ? '' : 's') + ' · ' + money(grandTotal) + ' total · ' + sortLabel + ' · Click headers to sort · Click a checkbox to select an expense type, then press <b>Apply selection</b>'; }
   const typeHeader = tbl.querySelector('thead th[data-exp-type]'); if (typeHeader) typeHeader.addEventListener('click', () => { if (expSortKey === 'type') expSortDir = expSortDir === 'asc' ? 'desc' : 'asc'; else { expSortKey = 'type'; expSortDir = 'asc'; } renderExpenseAnalysisTable(recs); });
@@ -1278,14 +1282,15 @@ function renderUnifiedComparison(recs) {
     '<th data-ukey="chiros" class="sortable' + (rptUnifiedSortKey === 'chiros' ? ' sort-active' : '') + '" style="text-align:right; color:' + COMPANY_COLORS.CHIROS + '">Chiros<span class="rpt-sort-arrow">' + (rptUnifiedSortKey === 'chiros' ? (rptUnifiedSortDir === 'asc' ? '▲' : '▼') : '◇') + '</span></th>' +
     '<th data-ukey="fnd" class="sortable' + (rptUnifiedSortKey === 'fnd' ? ' sort-active' : '') + '" style="text-align:right; color:' + COMPANY_COLORS['CRIUS FND'] + '">Crius FND<span class="rpt-sort-arrow">' + (rptUnifiedSortKey === 'fnd' ? (rptUnifiedSortDir === 'asc' ? '▲' : '▼') : '◇') + '</span></th>' +
   '</tr>';
-  const selectedUnifiedAccount = reportAccts.size === 1 ? Array.from(reportAccts)[0] : null;
-  const hasUnifiedSelection = !!selectedUnifiedAccount;
+  const selectedUnifiedAccounts = new Set(reportAccts);
+  const hasUnifiedSelection = selectedUnifiedAccounts.size > 0;
+  const hideUnifiedTotal = selectedUnifiedAccounts.size === 1 || reportGroups.size === 1;
   body.innerHTML = rows.map(r => {
-    const isSelected = selectedUnifiedAccount === r.name;
+    const isSelected = selectedUnifiedAccounts.has(r.name);
     const rowClass = hasUnifiedSelection ? (isSelected ? ' class="unified-selected"' : ' class="unified-dim"') : '';
     const growthHtml = (r.growth === null || !isFinite(r.growth)) ? '<span style="color:var(--text-faint)">—</span>' : '<span style="color:' + (r.growth >= 0 ? 'var(--rose)' : 'var(--emerald)') + '; font-weight:700">' + (r.growth >= 0 ? '▲' : '▼') + ' ' + Math.abs(r.growth).toFixed(1) + '%</span>';
-    return '<tr' + rowClass + ' data-unified-account="' + esc(r.name) + '" tabindex="0" role="button" aria-pressed="' + isSelected + '" title="Select ' + esc(r.name) + ' to show its monthly details">' +
-      '<td><div class="clamp unified-account-name" title="' + esc(r.name) + '">' + (isSelected ? '<span class="unified-check">✓</span>' : '<span class="unified-dot"></span>') + esc(r.name) + '</div></td>' +
+    return '<tr' + rowClass + ' data-unified-account="' + esc(r.name) + '" tabindex="0" role="button" aria-pressed="' + isSelected + '" title="Select or deselect ' + esc(r.name) + ' to show its monthly details">' +
+      '<td><div class="clamp unified-account-name" title="' + esc(r.name) + '">' + esc(r.name) + '</div></td>' +
       yearsInScope.map(y => { const v = r.fyTotals[y] || 0; return '<td class="cell-num">' + (v > 0 ? money(v) : '<span style="color:var(--text-faint)">—</span>') + '</td>'; }).join('') +
       '<td class="cell-num" style="font-weight:800;color:var(--accent)">' + money(r.total) + '</td>' +
       '<td class="cell-num">' + growthHtml + '</td>' +
@@ -1300,22 +1305,23 @@ function renderUnifiedComparison(recs) {
   rows.forEach(r => { locTotals['CRIUS'] += r.locTotals['CRIUS'] || 0; locTotals['CHIROS'] += r.locTotals['CHIROS'] || 0; locTotals['CRIUS FND'] += r.locTotals['CRIUS FND'] || 0; });
   let growthFoot = '—';
   if (yearsInScope.length >= 2) { const first = yearTotals[0] || 0; const last = yearTotals[yearTotals.length - 1] || 0; if (first > 0) { const g = ((last - first) / first) * 100; growthFoot = '<span style="color:' + (g >= 0 ? 'var(--rose)' : 'var(--emerald)') + ';font-weight:700">' + (g >= 0 ? '▲' : '▼') + ' ' + Math.abs(g).toFixed(1) + '%</span>'; } }
-  if (foot) foot.innerHTML = '<tr><td style="font-weight:800">TOTAL</td>' + yearTotals.map(v => '<td class="cell-num" style="font-weight:800">' + money(v) + '</td>').join('') + '<td class="cell-num" style="font-weight:800;color:var(--accent)">' + money(grandTotal) + '</td><td class="cell-num">' + growthFoot + '</td><td class="cell-num" style="color:' + COMPANY_COLORS.CRIUS + ';font-weight:800">' + money(locTotals['CRIUS']) + '</td><td class="cell-num" style="color:' + COMPANY_COLORS.CHIROS + ';font-weight:800">' + money(locTotals['CHIROS']) + '</td><td class="cell-num" style="color:' + COMPANY_COLORS['CRIUS FND'] + ';font-weight:800">' + money(locTotals['CRIUS FND']) + '</td></tr>';
+  if (foot) foot.innerHTML = hideUnifiedTotal ? '' : '<tr><td style="font-weight:800">TOTAL</td>' + yearTotals.map(v => '<td class="cell-num" style="font-weight:800">' + money(v) + '</td>').join('') + '<td class="cell-num" style="font-weight:800;color:var(--accent)">' + money(grandTotal) + '</td><td class="cell-num">' + growthFoot + '</td><td class="cell-num" style="color:' + COMPANY_COLORS.CRIUS + ';font-weight:800">' + money(locTotals['CRIUS']) + '</td><td class="cell-num" style="color:' + COMPANY_COLORS.CHIROS + ';font-weight:800">' + money(locTotals['CHIROS']) + '</td><td class="cell-num" style="color:' + COMPANY_COLORS['CRIUS FND'] + ';font-weight:800">' + money(locTotals['CRIUS FND']) + '</td></tr>';
   if (sub) sub.textContent = rows.length + ' account group' + (rows.length === 1 ? '' : 's') + ' · ' + yearsInScope.length + ' year' + (yearsInScope.length === 1 ? '' : 's') + ' (' + yearsInScope.map(y => 'FY ' + y).join(', ') + ') · ' + money(grandTotal) + ' total in scope · Click an account group to filter Month-by-Month details; click it again to clear · Click any header to sort';
   head.querySelectorAll('th[data-ukey]').forEach(th => { th.addEventListener('click', () => { const k = th.getAttribute('data-ukey'); if (rptUnifiedSortKey === k) rptUnifiedSortDir = rptUnifiedSortDir === 'asc' ? 'desc' : 'asc'; else { rptUnifiedSortKey = k; rptUnifiedSortDir = (k === 'name') ? 'asc' : 'desc'; } renderUnifiedComparison(recs); }); });
   function selectUnifiedAccount(row) {
     if (!row) return;
     const name = row.getAttribute('data-unified-account');
     if (!name) return;
-    const alreadySelected = reportAccts.size === 1 && reportAccts.has(name) && reportGroups.size === 0;
+    const next = new Set(reportAccts);
+    if (next.has(name)) next.delete(name); else next.add(name);
     reportGroups = new Set();
     pendingGroups = new Set();
-    reportAccts = alreadySelected ? new Set() : new Set([name]);
-    pendingAccts = new Set(reportAccts);
+    reportAccts = next;
+    pendingAccts = new Set(next);
     renderReport();
-    if (!alreadySelected) {
+    if (next.size) {
       const monthTable = document.getElementById('expAnalysisTable');
-      if (monthTable) monthTable.closest('.panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (monthTable) monthTable.closest('.panel')?.scrollIntoView({ behavior: 'auto', block: 'start' });
     }
   }
   body.querySelectorAll('tr[data-unified-account]').forEach(row => {
