@@ -760,3 +760,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-body);
 .rf-jump { flex-shrink:0; padding:5px 11px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-muted); border-radius:6px; font-family:inherit; font-size:11px; font-weight:600; cursor:pointer; transition:all .12s ease; }
 .rf-jump:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
 @media (max-width:576px) { .rf-jump { display:none; } }
+
+/* ── Report tab: dropdown filters (same look as the Expense Overview toolbar) ── */
+.report-filter-bar { flex-direction: row; align-items: center; padding: 12px 18px; }
+.report-filter-bar .toolbar { width: 100%; }
