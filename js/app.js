@@ -1123,7 +1123,8 @@ function renderExpenseAnalysisTable(recs) {
   const months = Object.keys(monthSet).sort(monthKeySort);
   const groups = {};
   recs.forEach(r => {
-    const g = r.particulars || 'Uncategorized';
+    const rawGroup = r.particulars || 'Uncategorized';
+    const g = /^expenses\s*\(\s*(direct|indirect)\s*\)$/i.test(rawGroup.trim()) ? 'Expenses' : rawGroup;
     const a = r.category || 'Uncategorized';
     const m = monthKey(r);
     if (!groups[g]) groups[g] = { total: 0, accounts: {}, byMonth: {} };
