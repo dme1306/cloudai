@@ -59,7 +59,7 @@
 
   // Reset for both Reset buttons and expense/account-group selection changes.
   document.addEventListener('click', function (event) {
-    if (event.target.closest('#rptResetBtn, #resetBtn, #expApplyBtn, #expClearBtn, [data-unified-account], #expAnalysisTable tr[data-sel-kind]')) {
+    if (event.target.closest('#brandHome, #rptResetBtn, #resetBtn, #expApplyBtn, #expClearBtn, [data-unified-account], #expAnalysisTable tr[data-sel-kind]')) {
       resetSavingsView();
     }
   }, true);
