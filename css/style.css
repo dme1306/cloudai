@@ -1072,3 +1072,57 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-body);
 #rptUnifiedBody tr.unified-selected .unified-dot { background:var(--accent); }
 #rptUnifiedBody tr[data-unified-account]:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
 #rptUnifiedSub { line-height:1.5; }
+
+
+/* ── Crisp, static account-group selection and readable monthly details ── */
+#rptUnifiedBody tr[data-unified-account],
+#rptUnifiedBody tr[data-unified-account] > td {
+  transition: none !important;
+  animation: none !important;
+}
+#rptUnifiedBody tr.unified-dim { opacity: .52; }
+#rptUnifiedBody tr.unified-dim:hover { opacity: .82; }
+#rptUnifiedBody tr.unified-selected { opacity: 1; }
+#rptUnifiedBody tr.unified-selected > td {
+  background: var(--accent-soft) !important;
+  color: var(--text) !important;
+  font-weight: 700;
+  box-shadow: none !important;
+  border-top: 1px solid var(--accent);
+  border-bottom: 1px solid var(--accent);
+}
+#rptUnifiedBody tr.unified-selected > td:first-child {
+  border-left: 3px solid var(--accent);
+}
+.unified-account-name { gap: 0 !important; }
+.unified-check, .unified-dot { display: none !important; }
+#expAnalysisTable tr,
+#expAnalysisTable tr > td,
+#expAnalysisTable .sel-box {
+  transition: none !important;
+  animation: none !important;
+}
+#expAnalysisTable tr.row-dim > td,
+#expAnalysisTable tr.row-dim > td.exp-type-col {
+  color: var(--text-muted) !important;
+  opacity: 1 !important;
+}
+#expAnalysisTable tr.row-dim > td.col-amount,
+#expAnalysisTable tr.row-dim .chg {
+  color: var(--text-muted) !important;
+  opacity: 1 !important;
+}
+#expAnalysisTable .group-row > td.exp-type-col {
+  background: var(--accent-soft) !important;
+  color: var(--text) !important;
+  box-shadow: inset 3px 0 0 var(--accent) !important;
+}
+#expAnalysisTable .acct-row > td {
+  background: var(--surface) !important;
+}
+#expAnalysisTable .acct-row:nth-child(even) > td {
+  background: var(--surface-2) !important;
+}
+#expAnalysisTable .total-row > td {
+  background: var(--surface-2) !important;
+}
