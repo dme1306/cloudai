@@ -11,6 +11,18 @@
       button.disabled = false;
       button.textContent = 'Generate solution';
     }
+
+    // Yearly Review follows the same generate/reset lifecycle.
+    reviewGenerated = false;
+    const reviewResults = document.getElementById('rptYearReviewResults');
+    const reviewList = document.getElementById('rptYearReviewList');
+    const reviewButton = document.querySelector('.gen-btn[data-gen="review"]');
+    if (reviewResults) reviewResults.hidden = true;
+    if (reviewList) reviewList.innerHTML = '';
+    if (reviewButton) {
+      reviewButton.disabled = false;
+      reviewButton.textContent = 'Generate review';
+    }
   }
 
   function renderSavingsSection(recs) {
