@@ -393,18 +393,8 @@ function updateExpSelUI() {
   cl.style.display = (pn || an) ? '' : 'none';
 }
 function applyExpSelection() {
-  const selectedGroups = new Set(pendingGroups);
-  const selectedAccounts = new Set(pendingAccts);
-  // An Expense Type row can contain several account groups. Expand it so the
-  // yearly comparison and monthly table always show the same selected data.
-  if (selectedGroups.size) {
-    allRecords.forEach(r => {
-      if (selectedGroups.has(getExpenseTypeName(r))) selectedAccounts.add(r.category || 'Uncategorized');
-    });
-  }
-  reportGroups = selectedGroups;
-  reportAccts = selectedAccounts;
-  pendingAccts = new Set(selectedAccounts);
+  reportGroups = new Set(pendingGroups);
+  reportAccts = new Set(pendingAccts);
   renderReport();
 }
 function clearExpSelection() {
@@ -1077,8 +1067,8 @@ function renderReport() {
   renderReportFilterUI();
   renderInsights(filtered);
   renderExpenseAnalysisTable(filtered);
-  // Keep all account groups visible in the selector; the expense table uses the filtered records.
-  renderUnifiedComparison(base);
+  // Both analysis tables use the same filtered records so selections stay in sync.
+  renderUnifiedComparison(filtered);
   renderSavingsSection(filtered);
   renderReviewSection(filtered);
   updateExpSelUI();
