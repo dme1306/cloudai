@@ -1028,3 +1028,18 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-body);
   opacity: 1 !important;
   font-weight: 800;
 }
+
+
+/* ── Make active sort direction arrows highly visible ── */
+.dt thead th.sort-asc .sort-arrow,
+.dt thead th.sort-desc .sort-arrow,
+.pivot-table thead th.sort-asc .sort-arrow,
+.pivot-table thead th.sort-desc .sort-arrow,
+.rpt-mini-table thead th.sort-active .rpt-sort-arrow,
+.exp-table thead th.sort-active .exp-sort-arrow {
+  color: #f97316 !important;
+  opacity: 1 !important;
+  font-weight: 900;
+  font-size: 12px;
+  text-shadow: 0 0 1px rgba(249, 115, 22, .35);
+}
