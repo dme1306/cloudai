@@ -1126,3 +1126,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-body);
 #expAnalysisTable .total-row > td {
   background: var(--surface-2) !important;
 }
+
+
+/* Compact data-driven savings generator */
+.savings-generator-head { align-items: center; gap: 16px; }
+.savings-generator-head .panel-sub { max-width: 680px; }
+.savings-generator-head .gen-btn { flex-shrink: 0; white-space: nowrap; }
+#rptSavingsResults[hidden] { display: none !important; }
+@media (max-width: 640px) {
+  .savings-generator-head { align-items: flex-start; flex-direction: column; }
+  .savings-generator-head .gen-btn { width: 100%; }
+}
