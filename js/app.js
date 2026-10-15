@@ -959,7 +959,8 @@ function switchTab(tab) {
   if (tab === 'report') { dash.classList.add('d-none'); rep.classList.remove('d-none'); renderReport(); }
   else { rep.classList.add('d-none'); dash.classList.remove('d-none'); }
   document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-tab') === tab); });
-  ['fyField', 'locField'].forEach(function (id) { const el = document.getElementById(id); if (el) el.style.display = (tab === 'report') ? 'none' : ''; });
+  ['fyField', 'locField', 'resetBtn'].forEach(function (id) { const el = document.getElementById(id); if (el) el.style.display = (tab === 'report') ? 'none' : ''; });
+  ['rptFyField', 'rptLocField', 'rptResetBtn'].forEach(function (id) { const el = document.getElementById(id); if (el) el.style.display = (tab === 'report') ? '' : 'none'; });
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
