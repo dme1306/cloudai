@@ -23,6 +23,16 @@ let currentFY  = 'ALL';
 let currentLoc = '';
 let reportYears = [];
 let reportAllYears = [];
+const ALL_COMPANIES = ['CRIUS', 'CHIROS', 'CRIUS FND'];
+let reportCompanies = [];            // applied
+let pendingYears = [];               // chosen but not applied yet
+let pendingCompanies = [];
+let reportGroups = new Set();        // applied expense-type selection (Particulars)
+let reportAccts  = new Set();        // applied expense-type selection (A/C names)
+let pendingGroups = new Set();       // selected in the table, not applied yet
+let pendingAccts  = new Set();
+let savingsGenerated = false;
+let reviewGenerated  = false;
 
 let drawerMode = 'ac';
 let drawerMonthKey = '';
@@ -178,44 +188,138 @@ function resetAllFilters() {
   closeDrawer(); applyClientFilters();
 }
 
-function getReportRecords() {
-  if (!reportYears.length) return [];
-  const set = new Set(reportYears);
+function arrEqual(a, b) { const x = a.slice().sort(), y = b.slice().sort(); return x.length === y.length && x.every((v, i) => v === y[i]); }
+function setsEqual(a, b) { if (a.size !== b.size) return false; for (const v of a) if (!b.has(v)) return false; return true; }
+function filtersDirty() { return !arrEqual(pendingYears, reportYears) || !arrEqual(pendingCompanies, reportCompanies); }
+
+/* applyTypes=false → years + companies only (feeds the Expense Analysis table)
+   applyTypes=true  → also the applied expense-type selection (feeds everything else) */
+function getReportRecords(applyTypes) {
+  if (!reportYears.length || !reportCompanies.length) return [];
+  const ys = new Set(reportYears), cs = new Set(reportCompanies);
+  const useTypes = !!applyTypes && (reportGroups.size || reportAccts.size);
   return allRecords.filter(r => {
-    const y = Number(r.financialYear);
-    if (!set.has(y)) return false;
-    if (currentLoc) return String(r.locationKey || '').toUpperCase() === currentLoc;
+    if (!ys.has(Number(r.financialYear))) return false;
+    if (!cs.has(String(r.locationKey || '').toUpperCase())) return false;
+    if (useTypes) {
+      const g = r.particulars || 'Uncategorized', a = r.category || 'Uncategorized';
+      if (!reportGroups.has(g) && !reportAccts.has(a)) return false;
+    }
     return true;
   });
 }
-function renderYearFilterChips() {
-  const chipsEl = document.getElementById('yearFilterChips');
-  const summaryEl = document.getElementById('yearFilterSummary');
-  if (!chipsEl) return;
-  if (!reportAllYears.length) { chipsEl.innerHTML = '<span style="color:var(--text-muted);font-size:12px">No years available</span>'; if (summaryEl) summaryEl.textContent = ''; return; }
-  chipsEl.innerHTML = reportAllYears.map(y => {
-    const active = reportYears.indexOf(y) !== -1;
-    return '<span class="year-chip' + (active ? ' active' : '') + '" data-year="' + y + '" role="button" tabindex="0"><span class="yc-check">' + (active ? '✓' : '+') + '</span> FY ' + y + '</span>';
-  }).join('');
-  chipsEl.querySelectorAll('.year-chip').forEach(chip => {
-    chip.addEventListener('click', () => toggleReportYear(parseInt(chip.getAttribute('data-year'), 10)));
-    chip.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleReportYear(parseInt(chip.getAttribute('data-year'), 10)); } });
+
+function initReportFilters() {
+  if (!reportCompanies.length) reportCompanies = ALL_COMPANIES.slice();
+  pendingYears = reportYears.slice();
+  pendingCompanies = reportCompanies.slice();
+  renderReportFilterUI();
+}
+
+function renderReportFilterUI() {
+  const yEl = document.getElementById('yearFilterChips');
+  const cEl = document.getElementById('companyFilterChips');
+  if (!yEl || !cEl) return;
+
+  yEl.innerHTML = reportAllYears.length ? reportAllYears.map(y => {
+    const on = pendingYears.indexOf(y) !== -1;
+    return '<span class="year-chip' + (on ? ' active' : '') + '" data-year="' + y + '" role="button" tabindex="0"><span class="yc-check">' + (on ? '✓' : '+') + '</span> FY ' + y + '</span>';
+  }).join('') : '<span style="color:var(--text-muted);font-size:12px">No years available</span>';
+  yEl.querySelectorAll('.year-chip').forEach(chip => {
+    const go = () => toggleReportYear(parseInt(chip.getAttribute('data-year'), 10));
+    chip.addEventListener('click', go);
+    chip.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
   });
-  if (summaryEl) {
-    if (!reportYears.length) summaryEl.textContent = 'No years selected — select at least one';
-    else if (reportYears.length === 1) summaryEl.innerHTML = 'Showing <b>FY ' + reportYears[0] + '</b>';
-    else { const sorted = reportYears.slice().sort((a,b) => a - b); summaryEl.innerHTML = 'Showing <b>' + sorted.length + ' years</b>: ' + sorted.join(', '); }
+
+  cEl.innerHTML = ALL_COMPANIES.map(k => {
+    const on = pendingCompanies.indexOf(k) !== -1;
+    const style = on ? ' style="background:' + COMPANY_COLORS[k] + '"' : '';
+    return '<span class="year-chip company-chip' + (on ? ' active' : '') + '" data-company="' + esc(k) + '"' + style + ' role="button" tabindex="0"><span class="yc-check">' + (on ? '✓' : '+') + '</span> ' + esc(COMPANY_NAMES[k]) + '</span>';
+  }).join('');
+  cEl.querySelectorAll('.company-chip').forEach(chip => {
+    const go = () => toggleReportCompany(chip.getAttribute('data-company'));
+    chip.addEventListener('click', go);
+    chip.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
+
+  /* what is currently applied */
+  const ap = document.getElementById('rfApplied');
+  const tags = arr => arr.length ? arr.map(t => '<span class="rf-tag">' + esc(t) + '</span>').join('') : '<span class="rf-tag none">none selected</span>';
+  const yrs = reportYears.slice().sort((a, b) => a - b).map(y => 'FY ' + y);
+  const cos = reportCompanies.map(k => COMPANY_NAMES[k] || k);
+  const typeNames = Array.from(reportGroups).concat(Array.from(reportAccts));
+  let typeHtml = '<span class="rf-tag">All expense types</span>';
+  if (typeNames.length) {
+    const shown = typeNames.slice(0, 3).map(t => '<span class="rf-tag">' + esc(t.length > 28 ? t.slice(0, 26) + '…' : t) + '</span>').join('');
+    typeHtml = shown + (typeNames.length > 3 ? '<span class="rf-tag">+' + (typeNames.length - 3) + ' more</span>' : '');
+  }
+  ap.innerHTML =
+    '<span class="rf-group"><span class="rf-glabel">Applied years</span>' + tags(yrs) + '</span>' +
+    '<span class="rf-group"><span class="rf-glabel">Companies</span>' + tags(cos) + '</span>' +
+    '<span class="rf-group"><span class="rf-glabel">Expense types</span>' + typeHtml + '</span>';
+
+  const dirty = filtersDirty();
+  const pend = document.getElementById('rfPending');
+  if (pend) pend.classList.toggle('d-none', !dirty);
+  const btn = document.getElementById('rfApplyBtn');
+  if (btn) {
+    const valid = pendingYears.length > 0 && pendingCompanies.length > 0;
+    btn.disabled = !dirty || !valid;
+    btn.title = !valid ? 'Select at least one year and one company' : '';
   }
 }
 function toggleReportYear(y) {
-  const idx = reportYears.indexOf(y);
-  if (idx === -1) reportYears.push(y); else reportYears.splice(idx, 1);
-  reportYears.sort((a,b) => a - b);
-  renderYearFilterChips();
-  if (currentTab === 'report') renderReport();
+  const i = pendingYears.indexOf(y);
+  if (i === -1) pendingYears.push(y); else pendingYears.splice(i, 1);
+  pendingYears.sort((a, b) => a - b);
+  renderReportFilterUI();
 }
-function selectAllReportYears() { reportYears = reportAllYears.slice(); renderYearFilterChips(); if (currentTab === 'report') renderReport(); }
-function clearReportYears() { reportYears = []; renderYearFilterChips(); if (currentTab === 'report') renderReport(); }
+function toggleReportCompany(k) {
+  const i = pendingCompanies.indexOf(k);
+  if (i === -1) pendingCompanies.push(k); else pendingCompanies.splice(i, 1);
+  renderReportFilterUI();
+}
+function selectAllReportYears()  { pendingYears = reportAllYears.slice(); renderReportFilterUI(); }
+function clearReportYears()      { pendingYears = []; renderReportFilterUI(); }
+function selectAllCompanies()    { pendingCompanies = ALL_COMPANIES.slice(); renderReportFilterUI(); }
+function clearCompanies()        { pendingCompanies = []; renderReportFilterUI(); }
+
+function applyReportFilters() {
+  if (!pendingYears.length || !pendingCompanies.length) return;
+  reportYears = pendingYears.slice().sort((a, b) => a - b);
+  reportCompanies = pendingCompanies.slice();
+  savingsGenerated = false; reviewGenerated = false;
+  renderReport();
+}
+
+/* ── expense-type selection (Looker-style cross filter) ── */
+function refreshExpSelClasses() {
+  document.querySelectorAll('#expAnalysisTable tr[data-sel-kind]').forEach(tr => {
+    const set = tr.getAttribute('data-sel-kind') === 'g' ? pendingGroups : pendingAccts;
+    tr.classList.toggle('row-sel', set.has(tr.getAttribute('data-sel-key')));
+  });
+}
+function updateExpSelUI() {
+  const st = document.getElementById('expSelStatus'), ap = document.getElementById('expApplyBtn'), cl = document.getElementById('expClearBtn');
+  if (!st || !ap || !cl) return;
+  const pn = pendingGroups.size + pendingAccts.size, an = reportGroups.size + reportAccts.size;
+  const dirty = !setsEqual(pendingGroups, reportGroups) || !setsEqual(pendingAccts, reportAccts);
+  if (dirty) st.innerHTML = '<b>' + pn + '</b> selected · not applied yet';
+  else if (an) st.innerHTML = 'Filtering the report by <b>' + an + '</b> expense type' + (an === 1 ? '' : 's');
+  else st.textContent = 'No selection — showing all expense types';
+  ap.disabled = !dirty;
+  cl.style.display = (pn || an) ? '' : 'none';
+}
+function applyExpSelection() {
+  reportGroups = new Set(pendingGroups); reportAccts = new Set(pendingAccts);
+  savingsGenerated = false; reviewGenerated = false;
+  renderReport();
+}
+function clearExpSelection() {
+  pendingGroups = new Set(); pendingAccts = new Set(); reportGroups = new Set(); reportAccts = new Set();
+  savingsGenerated = false; reviewGenerated = false;
+  renderReport();
+}
 
 function downloadCSV(filename, rows) {
   const csv = rows.map(row => row.map(cell => {
@@ -388,7 +492,7 @@ function loadInitial(isRefresh) {
       reportAllYears = years.slice();
       if (!reportYears.length) reportYears = reportAllYears.slice(-4);
       else { reportYears = reportYears.filter(y => reportAllYears.indexOf(y) !== -1); if (!reportYears.length) reportYears = reportAllYears.slice(-4); }
-      renderYearFilterChips();
+      initReportFilters();
       const stamp = new Date().toLocaleString('en-IN');
       document.getElementById('lastUpdate').textContent = 'Updated ' + stamp;
       document.getElementById('footerUpdate').textContent = 'Updated ' + stamp;
@@ -823,18 +927,47 @@ function switchTab(tab) {
   if (tab === 'report') { dash.classList.add('d-none'); rep.classList.remove('d-none'); renderReport(); }
   else { rep.classList.add('d-none'); dash.classList.remove('d-none'); }
   document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-tab') === tab); });
+  ['fyField', 'locField'].forEach(function (id) { const el = document.getElementById(id); if (el) el.style.display = (tab === 'report') ? 'none' : ''; });
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function renderReport() {
   const rep = document.getElementById('reportPage');
   if (!rep || !rep.classList.contains('page')) return;
-  const reportRecs = getReportRecords();
-  renderInsights(reportRecs);
-  renderExpenseAnalysisTable(reportRecs);
-  renderUnifiedComparison(reportRecs);
-  renderSavingsOpportunities(reportRecs);
-  renderYearlyReview(reportRecs);
+  const base = getReportRecords(false);      // years + companies
+  const filtered = getReportRecords(true);   // + expense-type selection
+  renderReportFilterUI();
+  renderInsights(filtered);
+  renderExpenseAnalysisTable(base);
+  renderUnifiedComparison(filtered);
+  renderSavingsSection(filtered);
+  renderReviewSection(filtered);
+  updateExpSelUI();
+}
+
+function genPlaceholderHtml(kind, icon, title, desc, label) {
+  return '<div class="gen-box"><div class="gen-ico">' + icon + '</div><div class="gen-title">' + title + '</div><div class="gen-desc">' + desc + '</div>' +
+         '<button type="button" class="btn-apply gen-btn" data-gen="' + kind + '">✨ ' + label + '</button></div>';
+}
+function renderSavingsSection(recs) {
+  const grid = document.getElementById('rptSavingsGrid'), sub = document.getElementById('rptSavingsSub');
+  if (!grid) return;
+  if (!savingsGenerated) {
+    grid.innerHTML = genPlaceholderHtml('savings', '💡', 'Savings plan not generated yet', 'Builds detailed, actionable savings plans from the current selection (' + fmt.format(recs.length) + ' transactions in scope).', 'Generate savings plan');
+    if (sub) sub.textContent = 'Press Generate to analyse the current selection';
+    return;
+  }
+  renderSavingsOpportunities(recs);
+}
+function renderReviewSection(recs) {
+  const list = document.getElementById('rptYearReviewList'), sub = document.getElementById('rptYearReviewSub');
+  if (!list) return;
+  if (!reviewGenerated) {
+    list.innerHTML = genPlaceholderHtml('review', '🔎', 'Yearly review not generated yet', 'Scans the current selection (' + fmt.format(recs.length) + ' transactions) for variances, spikes and documentation gaps, with an action plan for each.', 'Generate yearly review');
+    if (sub) sub.textContent = 'Press Generate to run the review on the current selection';
+    return;
+  }
+  renderYearlyReview(recs);
 }
 
 function renderInsights(recs) {
@@ -923,17 +1056,29 @@ function renderExpenseAnalysisTable(recs) {
     else chgHtml = '<span class="chg chg-none">—</span>';
     return '<td class="col-amount">' + amtStr + '</td><td class="col-change">' + chgHtml + '</td>';
   }
+  const hasApplied = reportGroups.size > 0 || reportAccts.size > 0;
+  function selClass(kind, key, groupName, acctNames) {
+    let c = '';
+    if ((kind === 'g' ? pendingGroups : pendingAccts).has(key)) c += ' row-sel';
+    if (hasApplied) {
+      const match = kind === 'g'
+        ? (reportGroups.has(key) || acctNames.some(a => reportAccts.has(a)))
+        : (reportAccts.has(key) || reportGroups.has(groupName));
+      if (!match) c += ' row-dim';
+    }
+    return c;
+  }
   let bodyHtml = '<tbody>';
   groupArr.forEach(({ name, data }, gi) => {
-    bodyHtml += '<tr class="group-row" data-group="' + gi + '">';
-    bodyHtml += '<td class="exp-type-col"><span class="group-toggle"><span class="arrow">▼</span>' + esc(name) + '</span></td>';
+    bodyHtml += '<tr class="group-row' + selClass('g', name, name, Object.keys(data.accounts)) + '" data-group="' + gi + '" data-sel-kind="g" data-sel-key="' + esc(name) + '">';
+    bodyHtml += '<td class="exp-type-col"><span class="group-toggle" title="Expand / collapse"><span class="arrow">▼</span></span><span class="sel-box"></span>' + esc(name) + '</td>';
     months.forEach((m, idx) => { const amt = data.byMonth[m] || 0; const prevAmt = idx > 0 ? (data.byMonth[months[idx - 1]] || 0) : null; bodyHtml += renderAmtChg(amt, prevAmt); });
     bodyHtml += '<td class="col-amount" style="font-weight:800;color:var(--accent)">' + money(data.total) + '</td>';
     bodyHtml += '</tr>';
     const sortedAccounts = Object.entries(data.accounts).sort((a, b) => b[1].total - a[1].total);
     sortedAccounts.forEach(([acctName, acctData]) => {
-      bodyHtml += '<tr class="acct-row" data-group-parent="' + gi + '">';
-      bodyHtml += '<td class="exp-type-col">' + esc(acctName) + '</td>';
+      bodyHtml += '<tr class="acct-row' + selClass('a', acctName, name, null) + '" data-group-parent="' + gi + '" data-sel-kind="a" data-sel-key="' + esc(acctName) + '">';
+      bodyHtml += '<td class="exp-type-col"><span class="sel-box"></span>' + esc(acctName) + '</td>';
       months.forEach((m, idx) => { const amt = acctData.byMonth[m] || 0; const prevAmt = idx > 0 ? (acctData.byMonth[months[idx - 1]] || 0) : null; bodyHtml += renderAmtChg(amt, prevAmt); });
       bodyHtml += '<td class="col-amount">' + money(acctData.total) + '</td>';
       bodyHtml += '</tr>';
@@ -944,11 +1089,25 @@ function renderExpenseAnalysisTable(recs) {
   bodyHtml += '<td class="col-amount" style="font-weight:800;color:var(--accent)">' + money(grandTotal) + '</td>';
   bodyHtml += '</tr></tbody>';
   tbl.innerHTML = head1 + bodyHtml;
-  if (subEl) { let sortLabel; if (expSortKey === 'type') sortLabel = 'Sorted by <b>Expense Type</b> (' + (expSortDir === 'asc' ? 'A → Z' : 'Z → A') + ')'; else if (expSortKey === 'total') sortLabel = 'Sorted by <b>Grand Total</b> (' + (expSortDir === 'asc' ? 'low → high' : 'high → low') + ')'; else { const [m, f] = expSortKey.split('|'); sortLabel = 'Sorted by <b>' + esc(m) + ' ' + (f === 'amt' ? 'Amount' : '% Change') + '</b> (' + (expSortDir === 'asc' ? 'asc' : 'desc') + ')'; } subEl.innerHTML = months.length + ' month' + (months.length === 1 ? '' : 's') + ' · ' + groupArr.length + ' expense group' + (groupArr.length === 1 ? '' : 's') + ' · ' + money(grandTotal) + ' total · ' + sortLabel + ' · Click <b>Expense Type</b>, a month\'s <b>Amount</b>, <b>% Change</b> or <b>Total</b> to sort · Click a group to expand / collapse'; }
+  if (subEl) { let sortLabel; if (expSortKey === 'type') sortLabel = 'Sorted by <b>Expense Type</b> (' + (expSortDir === 'asc' ? 'A → Z' : 'Z → A') + ')'; else if (expSortKey === 'total') sortLabel = 'Sorted by <b>Grand Total</b> (' + (expSortDir === 'asc' ? 'low → high' : 'high → low') + ')'; else { const [m, f] = expSortKey.split('|'); sortLabel = 'Sorted by <b>' + esc(m) + ' ' + (f === 'amt' ? 'Amount' : '% Change') + '</b> (' + (expSortDir === 'asc' ? 'asc' : 'desc') + ')'; } subEl.innerHTML = months.length + ' month' + (months.length === 1 ? '' : 's') + ' · ' + groupArr.length + ' expense group' + (groupArr.length === 1 ? '' : 's') + ' · ' + money(grandTotal) + ' total · ' + sortLabel + ' · Click headers to sort · Click a row to select it, then press <b>Apply selection</b> · Use ▼ to expand / collapse'; }
   const typeHeader = tbl.querySelector('thead th[data-exp-type]'); if (typeHeader) typeHeader.addEventListener('click', () => { if (expSortKey === 'type') expSortDir = expSortDir === 'asc' ? 'desc' : 'asc'; else { expSortKey = 'type'; expSortDir = 'asc'; } renderExpenseAnalysisTable(recs); });
   const totalHeader = tbl.querySelector('thead th[data-exp-total]'); if (totalHeader) totalHeader.addEventListener('click', () => { if (expSortKey === 'total') expSortDir = expSortDir === 'asc' ? 'desc' : 'asc'; else { expSortKey = 'total'; expSortDir = 'desc'; } renderExpenseAnalysisTable(recs); });
   tbl.querySelectorAll('thead th[data-exp-month]').forEach(th => { th.addEventListener('click', () => { const m = th.getAttribute('data-exp-month'), f = th.getAttribute('data-exp-field'), key = m + '|' + f; if (expSortKey === key) expSortDir = expSortDir === 'asc' ? 'desc' : 'asc'; else { expSortKey = key; expSortDir = 'desc'; } renderExpenseAnalysisTable(recs); }); });
-  tbl.querySelectorAll('tr.group-row').forEach(gr => { gr.style.cursor = 'pointer'; gr.addEventListener('click', () => { const gid = gr.getAttribute('data-group'); const collapsed = gr.classList.toggle('grp-collapsed'); tbl.querySelectorAll('tr[data-group-parent="' + gid + '"]').forEach(row => { row.style.display = collapsed ? 'none' : ''; }); }); });
+  tbl.querySelectorAll('tr[data-sel-kind]').forEach(tr => {
+    tr.addEventListener('click', (e) => {
+      const kind = tr.getAttribute('data-sel-kind'), key = tr.getAttribute('data-sel-key');
+      if (kind === 'g' && e.target.closest('.group-toggle')) {
+        const gid = tr.getAttribute('data-group');
+        const collapsed = tr.classList.toggle('grp-collapsed');
+        tbl.querySelectorAll('tr[data-group-parent="' + gid + '"]').forEach(row => { row.style.display = collapsed ? 'none' : ''; });
+        return;
+      }
+      const set = kind === 'g' ? pendingGroups : pendingAccts;
+      if (set.has(key)) set.delete(key); else set.add(key);
+      refreshExpSelClasses();
+      updateExpSelUI();
+    });
+  });
 }
 
 function renderUnifiedComparison(recs) {
@@ -1430,7 +1589,7 @@ function renderYearlyReview(recs) {
 }
 
 function exportUnifiedComparisonCSV() {
-  const recs = getReportRecords();
+  const recs = getReportRecords(true);
   const yearsInScope = reportYears.slice().sort((a, b) => a - b);
   const rows = [['Account Group', ...yearsInScope.map(y => 'FY ' + y), 'Total', 'Growth %', 'Crius', 'Chiros', 'Crius FND']];
   const acctMap = {};
@@ -1810,3 +1969,30 @@ document.addEventListener('DOMContentLoaded', function () {
     return r;
   };
 })();
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   REPORT TAB — filter / selection / generate wiring
+   ═══════════════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', function () {
+  const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+  on('cfSelectAll', selectAllCompanies);
+  on('cfClearAll', clearCompanies);
+  on('rfApplyBtn', applyReportFilters);
+  on('expApplyBtn', applyExpSelection);
+  on('expClearBtn', clearExpSelection);
+
+  const rep = document.getElementById('reportPage');
+  if (rep) rep.addEventListener('click', function (e) {
+    const b = e.target.closest('.gen-btn');
+    if (!b || b.disabled) return;
+    const kind = b.getAttribute('data-gen');
+    b.disabled = true;
+    b.innerHTML = '<span class="spinner"></span> Generating…';
+    setTimeout(function () {
+      const recs = getReportRecords(true);
+      if (kind === 'savings') { savingsGenerated = true; renderSavingsSection(recs); }
+      else { reviewGenerated = true; renderReviewSection(recs); }
+    }, 60);
+  });
+});
