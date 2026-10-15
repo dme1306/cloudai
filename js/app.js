@@ -393,7 +393,18 @@ function updateExpSelUI() {
   cl.style.display = (pn || an) ? '' : 'none';
 }
 function applyExpSelection() {
-  reportGroups = new Set(pendingGroups); reportAccts = new Set(pendingAccts);
+  const selectedGroups = new Set(pendingGroups);
+  const selectedAccounts = new Set(pendingAccts);
+  // An Expense Type row can contain several account groups. Expand it so the
+  // yearly comparison and monthly table always show the same selected data.
+  if (selectedGroups.size) {
+    allRecords.forEach(r => {
+      if (selectedGroups.has(getExpenseTypeName(r))) selectedAccounts.add(r.category || 'Uncategorized');
+    });
+  }
+  reportGroups = selectedGroups;
+  reportAccts = selectedAccounts;
+  pendingAccts = new Set(selectedAccounts);
   renderReport();
 }
 function clearExpSelection() {
@@ -1113,10 +1124,6 @@ function renderInsights(recs) {
   const aMap = {}; recs.forEach(r => { const k = r.category || 'Uncategorized'; aMap[k] = (aMap[k] || 0) + r.expenseAmount; });
   const acctSorted = Object.entries(aMap).sort((a, b) => b[1] - a[1]);
   if (acctSorted.length) cards.push({ cls: 'if-top', icon: '🏆', label: 'Top account', value: esc(acctSorted[0][0]) + '<span class="if-sub">' + money(acctSorted[0][1]) + ' · ' + pct(total ? acctSorted[0][1] / total * 100 : 0) + ' of total</span>' });
-  const FLAG = /advance|cash|adjust|revers|refund|urgent|temp/i;
-  let flagged = 0, blank = 0;
-  recs.forEach(r => { const txt = ((r.descr || '') + ' ' + (r.txnRemark || '')).trim(); if (!txt) blank++; else if (FLAG.test(txt)) flagged++; });
-  cards.push({ cls: 'if-quality', icon: '🔍', label: 'Data quality', value: pct(tx ? blank / tx * 100 : 0) + ' missing remarks' + '<span class="if-sub">' + fmt.format(flagged) + ' entries contain flag words</span>' });
   ul.innerHTML = cards.map(c => '<div class="insight-fact ' + c.cls + '"><div class="insight-fact-icon">' + c.icon + '</div><div class="insight-fact-body"><div class="insight-fact-label">' + c.label + '</div><div class="insight-fact-value">' + c.value + '</div></div></div>').join('');
 }
 
