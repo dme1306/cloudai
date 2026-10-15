@@ -1123,8 +1123,10 @@ function renderExpenseAnalysisTable(recs) {
   const months = Object.keys(monthSet).sort(monthKeySort);
   const groups = {};
   recs.forEach(r => {
-    const rawGroup = r.particulars || 'Uncategorized';
-    const g = /^expenses\s*\(\s*(direct|indirect)\s*\)$/i.test(rawGroup.trim()) ? 'Expenses' : rawGroup;
+    const rawGroup = (r.particulars || 'Uncategorized').trim();
+    // Consolidate generic expense labels into one clean Expense Type: Expenses.
+    const isGenericExpense = /^(?:consumables?|expenses?\s*(?:\(\s*(?:direct|indirect)\s*\)|-?\s*(?:direct|indirect))?|(?:direct|indirect)\s+expenses?|(?:direct|indirect)\s+exp)$/i.test(rawGroup);
+    const g = isGenericExpense ? 'Expenses' : rawGroup;
     const a = r.category || 'Uncategorized';
     const m = monthKey(r);
     if (!groups[g]) groups[g] = { total: 0, accounts: {}, byMonth: {} };
