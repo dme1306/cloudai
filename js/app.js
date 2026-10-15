@@ -21,8 +21,9 @@ let allRecords = [];
 let records    = [];
 let currentFY  = 'ALL';   // derived: the single ticked FY, or 'ALL' when none / several are ticked
 let currentLoc = '';      // derived: the single ticked company, or '' when none / several are ticked
-let selFY  = new Set();   // ticked financial years (numbers); empty = All Years
-let selLoc = new Set();   // ticked companies (keys);          empty = All Companies
+let selFY  = new Set();   // ticked financial years (numbers)
+let selLoc = new Set();   // ticked companies (keys)
+let fyInitialized = false; // first-load flag: seeds selFY/selLoc to "everything selected"
 let allFYs = [];
 let fyMs = null, locMs = null, rptFyMs = null, rptLocMs = null;
 let reportYears = [];
@@ -72,14 +73,23 @@ const fmt2 = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumF
 
 /* ═══════════════════════════════════════════════════════════════════
    MULTI-SELECT CHECKBOX DROPDOWN (used by Expense Overview + Report)
-   Empty selection = "All". Ticking every option also collapses to "All".
+   Master checkbox has three states: checked / indeterminate / empty.
+   "Nothing selected" is a real state — the dashboard shows zero data.
    ═══════════════════════════════════════════════════════════════════ */
 function syncCurrent() {
   currentFY  = selFY.size === 1 ? String(Array.from(selFY)[0]) : 'ALL';
   currentLoc = selLoc.size === 1 ? Array.from(selLoc)[0] : '';
 }
-function fyScopeText()  { return selFY.size ? Array.from(selFY).sort((a, b) => a - b).map(y => 'FY ' + y).join(', ') : 'All Years'; }
-function locScopeText() { return selLoc.size ? ALL_COMPANIES.filter(k => selLoc.has(k)).map(k => COMPANY_NAMES[k] || k).join(', ') : 'All Companies'; }
+function fyScopeText() {
+  if (!selFY.size) return 'No years';
+  if (selFY.size >= allFYs.length) return 'All Years';
+  return Array.from(selFY).sort((a, b) => a - b).map(y => 'FY ' + y).join(', ');
+}
+function locScopeText() {
+  if (!selLoc.size) return 'No companies';
+  if (selLoc.size >= ALL_COMPANIES.length) return 'All Companies';
+  return ALL_COMPANIES.filter(k => selLoc.has(k)).map(k => COMPANY_NAMES[k] || k).join(', ');
+}
 
 function createMultiSelect(host, cfg) {
   host.classList.add('ms');
@@ -89,27 +99,55 @@ function createMultiSelect(host, cfg) {
   const open  = () => { document.dispatchEvent(new CustomEvent('ms-close-others', { detail: host })); host.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); };
 
   function refresh() {
-    const opts = cfg.options(), sel = cfg.getSel(), all = sel.size === 0;
-    const one = opts.filter(o => sel.has(o.value))[0];
-    txt.textContent = all ? cfg.allLabel : (sel.size === 1 && one ? one.label : sel.size + ' ' + cfg.plural);
+    const opts = cfg.options();
+    const sel = cfg.getSel();
+    const total = opts.length;
+    const selSize = sel.size;
+    const allSelected = total > 0 && selSize >= total;
+    const noneSelected = selSize === 0;
+
+    if (noneSelected)      txt.textContent = cfg.noneLabel || ('No ' + cfg.plural);
+    else if (allSelected)  txt.textContent = cfg.allLabel;
+    else {
+      const one = opts.filter(o => sel.has(o.value))[0];
+      txt.textContent = (selSize === 1 && one) ? one.label : selSize + ' ' + cfg.plural;
+    }
+
+    const masterChecked = allSelected;
+    const masterIndet   = !allSelected && !noneSelected;
+
     panel.innerHTML =
-      '<label class="ms-opt ms-all"><input type="checkbox" data-all' + (all ? ' checked' : '') + '><span>' + esc(cfg.allLabel) + '</span></label><div class="ms-sep"></div>' +
-      opts.map(o => '<label class="ms-opt"><input type="checkbox" value="' + esc(o.value) + '"' + ((all || sel.has(o.value)) ? ' checked' : '') + '><span>' + esc(o.label) + '</span></label>').join('');
+      '<label class="ms-opt ms-all"><input type="checkbox" data-all' +
+        (masterChecked ? ' checked' : '') +
+        '><span>' + esc(cfg.allLabel) + '</span></label>' +
+      '<div class="ms-sep"></div>' +
+      opts.map(o =>
+        '<label class="ms-opt"><input type="checkbox" value="' + esc(o.value) + '"' +
+        (sel.has(o.value) ? ' checked' : '') +
+        '><span>' + esc(o.label) + '</span></label>'
+      ).join('');
+
+    const master = panel.querySelector('input[data-all]');
+    if (master) master.indeterminate = masterIndet;
   }
+
   panel.addEventListener('change', e => {
     const t = e.target;
     if (!t || t.type !== 'checkbox') return;
     const values = cfg.options().map(o => o.value);
     let next;
-    if (t.hasAttribute('data-all')) next = new Set();
-    else {
+    if (t.hasAttribute('data-all')) {
       const cur = cfg.getSel();
-      next = cur.size ? new Set(cur) : new Set(values);
+      const isCurrentlyAll = values.length > 0 && cur.size >= values.length;
+      next = isCurrentlyAll ? new Set() : new Set(values);
+    } else {
+      const cur = cfg.getSel();
+      next = new Set(cur);
       if (t.checked) next.add(t.value); else next.delete(t.value);
-      if (next.size === 0 || next.size >= values.length) next = new Set();
     }
     cfg.setSel(next);
   });
+
   btn.addEventListener('click', e => { e.stopPropagation(); host.classList.contains('open') ? close() : open(); });
   panel.addEventListener('click', e => e.stopPropagation());
   document.addEventListener('click', close);
@@ -183,18 +221,22 @@ function fyRangeLabel() {
 }
 
 function computeDelta() {
+  if (!selFY.size) return null;
   let base = allRecords;
-  if (selLoc.size) base = base.filter(r => selLoc.has(String(r.locationKey || '').toUpperCase()));
+  if (selLoc.size && selLoc.size < ALL_COMPANIES.length) {
+    base = base.filter(r => selLoc.has(String(r.locationKey || '').toUpperCase()));
+  }
   const byFy = {};
   base.forEach(r => { const fy = Number(r.financialYear); if (!fy) return; byFy[fy] = (byFy[fy] || 0) + r.expenseAmount; });
   const years = Object.keys(byFy).map(Number).sort((a,b) => a - b);
   if (years.length < 2) return null;
   let curMin, curMax;
-  if (!selFY.size) { curMin = years[0]; curMax = years[years.length - 1]; }
-  else {
-    const sy = Array.from(selFY).sort((a, b) => a - b);
+  const sy = Array.from(selFY).sort((a, b) => a - b);
+  if (sy.length >= allFYs.length) {
+    curMin = years[0]; curMax = years[years.length - 1];
+  } else {
     curMin = sy[0]; curMax = sy[sy.length - 1];
-    if (curMax - curMin + 1 !== sy.length) return null;          // non-consecutive years: no like-for-like delta
+    if (curMax - curMin + 1 !== sy.length) return null;
     if (years.indexOf(curMin) === -1) return null;
   }
   const span = curMax - curMin + 1;
@@ -217,7 +259,9 @@ function renderDeltaBadge(el, delta) {
 function applyClientFilters() {
   let filtered = allRecords;
   if (selFY.size)  filtered = filtered.filter(r => selFY.has(Number(r.financialYear)));
+  else             filtered = [];
   if (selLoc.size) filtered = filtered.filter(r => selLoc.has(String(r.locationKey || '').toUpperCase()));
+  else             filtered = [];
   records = filtered;
   renderLayoutForFilter(); renderKPIs(); renderMonthlyBreakdown(); renderFYBreakdown(); applyPivotFilters(); updateResetButton();
   if (document.getElementById('drawer').classList.contains('open')) {
@@ -229,11 +273,15 @@ function applyClientFilters() {
 }
 function hasActiveFilters() {
   const sb = document.getElementById('searchBox'), ms = document.getElementById('monthSearch');
-  return selFY.size > 0 || selLoc.size > 0 || (sb && !!sb.value.trim()) || (ms && !!ms.value.trim());
+  const fyFiltered  = selFY.size  !== allFYs.length;
+  const locFiltered = selLoc.size !== ALL_COMPANIES.length;
+  return fyFiltered || locFiltered || (sb && !!sb.value.trim()) || (ms && !!ms.value.trim());
 }
 function updateResetButton() { const btn = document.getElementById('resetBtn'); if (btn) btn.classList.toggle('is-visible', hasActiveFilters()); }
 function resetAllFilters() {
-  selFY = new Set(); selLoc = new Set(); syncCurrent();
+  selFY  = new Set(allFYs);
+  selLoc = new Set(ALL_COMPANIES);
+  syncCurrent();
   monthSortKey = 'month'; monthSortDir = 'desc';
   fySortKey = 'year'; fySortDir = 'asc';
   monthDrawerColSort = 'amt'; monthDrawerColDir = 'desc'; monthDrawerPresetCompany = '';
@@ -250,8 +298,6 @@ function resetAllFilters() {
 function arrEqual(a, b) { const x = a.slice().sort(), y = b.slice().sort(); return x.length === y.length && x.every((v, i) => v === y[i]); }
 function setsEqual(a, b) { if (a.size !== b.size) return false; for (const v of a) if (!b.has(v)) return false; return true; }
 
-/* applyTypes=false → years + companies only (feeds the Expense Analysis table)
-   applyTypes=true  → also the applied expense-type selection (feeds everything else) */
 function getReportRecords(applyTypes) {
   if (!reportYears.length || !reportCompanies.length) return [];
   const ys = new Set(reportYears), cs = new Set(reportCompanies);
@@ -267,7 +313,6 @@ function getReportRecords(applyTypes) {
   });
 }
 
-/* Report tab uses the same checkbox dropdowns as the Expense Overview (own selection, empty = all). */
 function syncReportSelection() {
   reportYears = reportFYSel.size ? Array.from(reportFYSel).sort((a, b) => a - b) : reportAllYears.slice();
   reportCompanies = reportLocSel.size ? ALL_COMPANIES.filter(k => reportLocSel.has(k)) : ALL_COMPANIES.slice();
@@ -280,7 +325,6 @@ function initReportFilters() {
 function reportFiltersActive() { return reportFYSel.size > 0 || reportLocSel.size > 0; }
 function resetReportFilters() { reportFYSel = new Set(); reportLocSel = new Set(); syncReportSelection(); renderReport(); }
 
-/* The summary bar below the dropdowns is frozen on scroll. */
 function renderReportFilterUI() {
   if (rptFyMs) rptFyMs.refresh();
   if (rptLocMs) rptLocMs.refresh();
@@ -306,7 +350,6 @@ function renderReportFilterUI() {
     '<span class="rf-count">' + fmt.format(n) + ' transactions</span>';
 }
 
-/* ── expense-type selection (Looker-style cross filter) ── */
 function refreshExpSelClasses() {
   document.querySelectorAll('#expAnalysisTable tr[data-sel-kind]').forEach(tr => {
     const set = tr.getAttribute('data-sel-kind') === 'g' ? pendingGroups : pendingAccts;
@@ -345,7 +388,7 @@ function downloadCSV(filename, rows) {
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 function csvTimestamp() { const d = new Date(); const pad = n => String(n).padStart(2, '0'); return d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes()); }
-function fyScopeTag() { return (selFY.size ? 'fy' + Array.from(selFY).sort((a, b) => a - b).join('-') : 'allyears') + (selLoc.size ? '_' + Array.from(selLoc).map(k => k.toLowerCase().replace(/\s+/g, '')).join('-') : ''); }
+function fyScopeTag() { return (selFY.size && selFY.size < allFYs.length ? 'fy' + Array.from(selFY).sort((a, b) => a - b).join('-') : 'allyears') + (selLoc.size && selLoc.size < ALL_COMPANIES.length ? '_' + Array.from(selLoc).map(k => k.toLowerCase().replace(/\s+/g, '')).join('-') : ''); }
 
 function exportFYCSV() {
   const rows = [['Financial Year','Crius','Chiros','Crius FND','Total','Tx','Avg / Tx','YoY %','Top Month']];
@@ -410,13 +453,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   fyMs = createMultiSelect(document.getElementById('fyMs'), {
-    allLabel: 'All Years', plural: 'years',
+    allLabel: 'All Years', noneLabel: 'No years', plural: 'years',
     options: () => allFYs.map(y => ({ value: String(y), label: 'FY ' + y })),
     getSel: () => new Set(Array.from(selFY).map(String)),
     setSel: sel => { selFY = new Set(Array.from(sel).map(Number)); syncCurrent(); fyMs.refresh(); applyClientFilters(); }
   });
   locMs = createMultiSelect(document.getElementById('locMs'), {
-    allLabel: 'All Companies', plural: 'companies',
+    allLabel: 'All Companies', noneLabel: 'No companies', plural: 'companies',
     options: () => ALL_COMPANIES.map(k => ({ value: k, label: COMPANY_NAMES[k] || k })),
     getSel: () => new Set(selLoc),
     setSel: sel => { selLoc = new Set(sel); syncCurrent(); locMs.refresh(); applyClientFilters(); }
@@ -483,18 +526,17 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeDrawer(); closeCommandPalette(); closeAIAssistant(); }
-    // Ctrl/Cmd + K opens the command palette (the footer advertises it)
     if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 'k') { e.preventDefault(); openCommandPalette(); }
   });
 
   rptFyMs = createMultiSelect(document.getElementById('rptFyMs'), {
-    allLabel: 'All Years', plural: 'years',
+    allLabel: 'All Years', noneLabel: 'No years', plural: 'years',
     options: () => reportAllYears.map(y => ({ value: String(y), label: 'FY ' + y })),
     getSel: () => new Set(Array.from(reportFYSel).map(String)),
     setSel: sel => { reportFYSel = new Set(Array.from(sel).map(Number)); syncReportSelection(); renderReport(); }
   });
   rptLocMs = createMultiSelect(document.getElementById('rptLocMs'), {
-    allLabel: 'All Companies', plural: 'companies',
+    allLabel: 'All Companies', noneLabel: 'No companies', plural: 'companies',
     options: () => ALL_COMPANIES.map(k => ({ value: k, label: COMPANY_NAMES[k] || k })),
     getSel: () => new Set(reportLocSel),
     setSel: sel => { reportLocSel = new Set(sel); syncReportSelection(); renderReport(); }
@@ -510,7 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ═══════════════════════════════════════════════════════════════════
-   DATA LOAD — now via the Cloudflare Worker (/data)
+   DATA LOAD — via the Cloudflare Worker (/data)
    ═══════════════════════════════════════════════════════════════════ */
 function loadInitial(isRefresh) {
   if (!isRefresh) showLoading('Loading dashboard…');
@@ -539,8 +581,14 @@ function loadInitial(isRefresh) {
 function populateFY(years) {
   allFYs = years.map(Number).sort((a, b) => a - b);
   selFY = new Set(Array.from(selFY).filter(y => allFYs.indexOf(y) !== -1));
+  if (!fyInitialized && allFYs.length) {
+    selFY  = new Set(allFYs);
+    selLoc = new Set(ALL_COMPANIES);
+    fyInitialized = true;
+  }
   syncCurrent();
-  if (fyMs) fyMs.refresh();
+  if (fyMs)  fyMs.refresh();
+  if (locMs) locMs.refresh();
 }
 
 function renderLayoutForFilter() {
@@ -967,8 +1015,8 @@ function switchTab(tab) {
 function renderReport() {
   const rep = document.getElementById('reportPage');
   if (!rep || !rep.classList.contains('page')) return;
-  const base = getReportRecords(false);      // years + companies
-  const filtered = getReportRecords(true);   // + expense-type selection
+  const base = getReportRecords(false);
+  const filtered = getReportRecords(true);
   renderReportFilterUI();
   renderInsights(filtered);
   renderExpenseAnalysisTable(base);
@@ -1122,19 +1170,27 @@ function renderExpenseAnalysisTable(recs) {
   bodyHtml += '<td class="col-amount" style="font-weight:800;color:var(--accent)">' + money(grandTotal) + '</td>';
   bodyHtml += '</tr></tbody>';
   tbl.innerHTML = head1 + bodyHtml;
-  if (subEl) { let sortLabel; if (expSortKey === 'type') sortLabel = 'Sorted by <b>Expense Type</b> (' + (expSortDir === 'asc' ? 'A → Z' : 'Z → A') + ')'; else if (expSortKey === 'total') sortLabel = 'Sorted by <b>Grand Total</b> (' + (expSortDir === 'asc' ? 'low → high' : 'high → low') + ')'; else { const [m, f] = expSortKey.split('|'); sortLabel = 'Sorted by <b>' + esc(m) + ' ' + (f === 'amt' ? 'Amount' : '% Change') + '</b> (' + (expSortDir === 'asc' ? 'asc' : 'desc') + ')'; } subEl.innerHTML = months.length + ' month' + (months.length === 1 ? '' : 's') + ' · ' + groupArr.length + ' expense group' + (groupArr.length === 1 ? '' : 's') + ' · ' + money(grandTotal) + ' total · ' + sortLabel + ' · Click headers to sort · Click a row to select it, then press <b>Apply selection</b> · Use ▼ to expand / collapse'; }
+  if (subEl) { let sortLabel; if (expSortKey === 'type') sortLabel = 'Sorted by <b>Expense Type</b> (' + (expSortDir === 'asc' ? 'A → Z' : 'Z → A') + ')'; else if (expSortKey === 'total') sortLabel = 'Sorted by <b>Grand Total</b> (' + (expSortDir === 'asc' ? 'low → high' : 'high → low') + ')'; else { const [m, f] = expSortKey.split('|'); sortLabel = 'Sorted by <b>' + esc(m) + ' ' + (f === 'amt' ? 'Amount' : '% Change') + '</b> (' + (expSortDir === 'asc' ? 'asc' : 'desc') + ')'; } subEl.innerHTML = months.length + ' month' + (months.length === 1 ? '' : 's') + ' · ' + groupArr.length + ' expense group' + (groupArr.length === 1 ? '' : 's') + ' · ' + money(grandTotal) + ' total · ' + sortLabel + ' · Click headers to sort · Click a checkbox to select an expense type, then press <b>Apply selection</b>'; }
   const typeHeader = tbl.querySelector('thead th[data-exp-type]'); if (typeHeader) typeHeader.addEventListener('click', () => { if (expSortKey === 'type') expSortDir = expSortDir === 'asc' ? 'desc' : 'asc'; else { expSortKey = 'type'; expSortDir = 'asc'; } renderExpenseAnalysisTable(recs); });
   const totalHeader = tbl.querySelector('thead th[data-exp-total]'); if (totalHeader) totalHeader.addEventListener('click', () => { if (expSortKey === 'total') expSortDir = expSortDir === 'asc' ? 'desc' : 'asc'; else { expSortKey = 'total'; expSortDir = 'desc'; } renderExpenseAnalysisTable(recs); });
   tbl.querySelectorAll('thead th[data-exp-month]').forEach(th => { th.addEventListener('click', () => { const m = th.getAttribute('data-exp-month'), f = th.getAttribute('data-exp-field'), key = m + '|' + f; if (expSortKey === key) expSortDir = expSortDir === 'asc' ? 'desc' : 'asc'; else { expSortKey = key; expSortDir = 'desc'; } renderExpenseAnalysisTable(recs); }); });
   tbl.querySelectorAll('tr[data-sel-kind]').forEach(tr => {
     tr.addEventListener('click', (e) => {
       const kind = tr.getAttribute('data-sel-kind'), key = tr.getAttribute('data-sel-key');
+
+      // Expand / collapse — only from the little arrow
       if (kind === 'g' && e.target.closest('.group-toggle')) {
         const gid = tr.getAttribute('data-group');
         const collapsed = tr.classList.toggle('grp-collapsed');
-        tbl.querySelectorAll('tr[data-group-parent="' + gid + '"]').forEach(row => { row.style.display = collapsed ? 'none' : ''; });
+        tbl.querySelectorAll('tr[data-group-parent="' + gid + '"]').forEach(row => {
+          row.style.display = collapsed ? 'none' : '';
+        });
         return;
       }
+
+      // Selection happens ONLY when the checkbox itself is clicked.
+      if (!e.target.closest('.sel-box')) return;
+
       const set = kind === 'g' ? pendingGroups : pendingAccts;
       if (set.has(key)) set.delete(key); else set.add(key);
       refreshExpSelClasses();
@@ -1647,8 +1703,8 @@ function buildCommandItems() {
   items.push({ type:'action', icon:'⬇', label:'Export FY breakdown as CSV', hint:'Action', action: () => { closeCommandPalette(); exportFYCSV(); } });
   const fys = [...new Set(allRecords.map(r => Number(r.financialYear)))].filter(y => y).sort((a,b) => b - a);
   fys.forEach(fy => items.push({ type:'fy', icon:'📅', label:'FY ' + fy, hint:'Year', action: () => { closeCommandPalette(); selFY = new Set([fy]); syncCurrent(); if (fyMs) fyMs.refresh(); applyClientFilters(); } }));
-  items.push({ type:'fy', icon:'📅', label:'All Years', hint:'Year', action: () => { closeCommandPalette(); selFY = new Set(); syncCurrent(); if (fyMs) fyMs.refresh(); applyClientFilters(); } });
-  [['', 'All Companies'], ['CRIUS', 'Crius'], ['CHIROS', 'Chiros'], ['CRIUS FND', 'Crius FND']].forEach(([val, label]) => { items.push({ type:'company', icon:'🏢', label, hint:'Company', action: () => { closeCommandPalette(); selLoc = val ? new Set([val]) : new Set(); syncCurrent(); if (locMs) locMs.refresh(); applyClientFilters(); } }); });
+  items.push({ type:'fy', icon:'📅', label:'All Years', hint:'Year', action: () => { closeCommandPalette(); selFY = new Set(allFYs); syncCurrent(); if (fyMs) fyMs.refresh(); applyClientFilters(); } });
+  [['__ALL__', 'All Companies'], ['CRIUS', 'Crius'], ['CHIROS', 'Chiros'], ['CRIUS FND', 'Crius FND']].forEach(([val, label]) => { items.push({ type:'company', icon:'🏢', label, hint:'Company', action: () => { closeCommandPalette(); selLoc = val === '__ALL__' ? new Set(ALL_COMPANIES) : new Set([val]); syncCurrent(); if (locMs) locMs.refresh(); applyClientFilters(); } }); });
   const partTotals = {};
   records.forEach(r => { const k = r.particulars || 'Uncategorized'; partTotals[k] = (partTotals[k] || 0) + r.expenseAmount; });
   const topParts = Object.entries(partTotals).sort((a,b) => b[1] - a[1]).slice(0, 12);
@@ -1823,13 +1879,9 @@ function aiNewChat() {
 function aiFormatAnswer(text) {
   if (!text) return '';
   var s = String(text).trim();
-
-  // Fast-path: the local fast-answer engine returns ready HTML
-  // starting with <div>. Pass it through untouched so it renders.
   if (/^<div\b/i.test(s)) {
     return s;
   }
-
   var html = s
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   html = html.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
@@ -1895,7 +1947,6 @@ function aiSendQuestion(question) {
     };
   });
 
-  /* askGemini() now lives in js/ai.js and returns a Promise */
   askGemini(finalQuestion, payload, skipFast)
     .then(function(answer) {
       if (sendBtn) sendBtn.disabled = false;
