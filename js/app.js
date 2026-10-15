@@ -1096,12 +1096,23 @@ function renderSavingsSection(recs) {
   renderSavingsOpportunities(recs);
 }
 function renderReviewSection(recs) {
-  const list = document.getElementById('rptYearReviewList'), sub = document.getElementById('rptYearReviewSub');
+  const list = document.getElementById('rptYearReviewList');
+  const results = document.getElementById('rptYearReviewResults');
+  const button = document.querySelector('.gen-btn[data-gen="review"]');
   if (!list) return;
   if (!reviewGenerated) {
-    list.innerHTML = genPlaceholderHtml('review', '🔎', 'Yearly review not generated yet', 'Scans the current selection (' + fmt.format(recs.length) + ' transactions) for variances, spikes and documentation gaps, with an action plan for each.', 'Generate yearly review');
-    if (sub) sub.textContent = 'Press Generate to run the review on the current selection';
+    if (results) results.hidden = true;
+    list.innerHTML = '';
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Generate review';
+    }
     return;
+  }
+  if (results) results.hidden = false;
+  if (button) {
+    button.disabled = false;
+    button.textContent = 'Generate review';
   }
   renderYearlyReview(recs);
 }
