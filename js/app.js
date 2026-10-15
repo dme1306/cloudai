@@ -1124,15 +1124,17 @@ function renderExpenseAnalysisTable(recs) {
   const groups = {};
   recs.forEach(r => {
     const rawGroup = (r.particulars || 'Uncategorized').trim();
-    // Consolidate generic expense labels into one clean Expense Type: Expenses.
+    // Generic labels are not expense types; promote the actual expense account name instead.
     const isGenericExpense = /^(?:consumables?|expenses?\s*(?:\(\s*(?:direct|indirect)\s*\)|-?\s*(?:direct|indirect))?|(?:direct|indirect)\s+expenses?|(?:direct|indirect)\s+exp)$/i.test(rawGroup);
-    const g = isGenericExpense ? 'Expenses' : rawGroup;
-    const a = r.category || 'Uncategorized';
+    const g = isGenericExpense ? (r.category || 'Uncategorized') : rawGroup;
+    const a = isGenericExpense ? null : (r.category || 'Uncategorized');
     const m = monthKey(r);
     if (!groups[g]) groups[g] = { total: 0, accounts: {}, byMonth: {} };
-    if (!groups[g].accounts[a]) groups[g].accounts[a] = { total: 0, byMonth: {} };
-    groups[g].accounts[a].byMonth[m] = (groups[g].accounts[a].byMonth[m] || 0) + r.expenseAmount;
-    groups[g].accounts[a].total += r.expenseAmount;
+    if (a) {
+      if (!groups[g].accounts[a]) groups[g].accounts[a] = { total: 0, byMonth: {} };
+      groups[g].accounts[a].byMonth[m] = (groups[g].accounts[a].byMonth[m] || 0) + r.expenseAmount;
+      groups[g].accounts[a].total += r.expenseAmount;
+    }
     groups[g].byMonth[m] = (groups[g].byMonth[m] || 0) + r.expenseAmount;
     groups[g].total += r.expenseAmount;
   });
