@@ -308,6 +308,12 @@ function resetAllFilters() {
 function arrEqual(a, b) { const x = a.slice().sort(), y = b.slice().sort(); return x.length === y.length && x.every((v, i) => v === y[i]); }
 function setsEqual(a, b) { if (a.size !== b.size) return false; for (const v of a) if (!b.has(v)) return false; return true; }
 
+function getExpenseTypeName(r) {
+  const rawGroup = (r.particulars || 'Uncategorized').trim();
+  const isGenericExpense = /^(?:consumables?|expenses?\s*(?:\(\s*(?:direct|indirect)\s*\)|-?\s*(?:direct|indirect))?|(?:direct|indirect)\s+expenses?|(?:direct|indirect)\s+exp)$/i.test(rawGroup);
+  return isGenericExpense ? (r.category || 'Uncategorized') : rawGroup;
+}
+
 function getReportRecords(applyTypes) {
   if (!reportYears.length || !reportCompanies.length) return [];
   const ys = new Set(reportYears), cs = new Set(reportCompanies);
@@ -316,7 +322,7 @@ function getReportRecords(applyTypes) {
     if (!ys.has(Number(r.financialYear))) return false;
     if (!cs.has(String(r.locationKey || '').toUpperCase())) return false;
     if (useTypes) {
-      const g = r.particulars || 'Uncategorized', a = r.category || 'Uncategorized';
+      const g = getExpenseTypeName(r), a = r.category || 'Uncategorized';
       if (!reportGroups.has(g) && !reportAccts.has(a)) return false;
     }
     return true;
@@ -1059,7 +1065,7 @@ function renderReport() {
   const filtered = getReportRecords(true);
   renderReportFilterUI();
   renderInsights(filtered);
-  renderExpenseAnalysisTable(base);
+  renderExpenseAnalysisTable(filtered);
   renderUnifiedComparison(filtered);
   renderSavingsSection(filtered);
   renderReviewSection(filtered);
@@ -1124,9 +1130,8 @@ function renderExpenseAnalysisTable(recs) {
   const groups = {};
   recs.forEach(r => {
     const rawGroup = (r.particulars || 'Uncategorized').trim();
-    // Generic labels are not expense types; promote the actual expense account name instead.
     const isGenericExpense = /^(?:consumables?|expenses?\s*(?:\(\s*(?:direct|indirect)\s*\)|-?\s*(?:direct|indirect))?|(?:direct|indirect)\s+expenses?|(?:direct|indirect)\s+exp)$/i.test(rawGroup);
-    const g = isGenericExpense ? (r.category || 'Uncategorized') : rawGroup;
+    const g = getExpenseTypeName(r);
     const a = isGenericExpense ? null : (r.category || 'Uncategorized');
     const m = monthKey(r);
     if (!groups[g]) groups[g] = { total: 0, accounts: {}, byMonth: {} };
@@ -1197,7 +1202,7 @@ function renderExpenseAnalysisTable(recs) {
   let bodyHtml = '<tbody>';
   groupArr.forEach(({ name, data }, gi) => {
     bodyHtml += '<tr class="group-row' + selClass('g', name, name, Object.keys(data.accounts)) + '" data-group="' + gi + '" data-sel-kind="g" data-sel-key="' + esc(name) + '">';
-    bodyHtml += '<td class="exp-type-col"><span class="group-toggle" title="Expand / collapse"><span class="arrow">▼</span></span><span class="sel-box"></span>' + esc(name) + '</td>';
+    bodyHtml += '<td class="exp-type-col"><span class="sel-box"></span>' + esc(name) + '</td>';
     months.forEach((m, idx) => { const amt = data.byMonth[m] || 0; const prevAmt = idx > 0 ? (data.byMonth[months[idx - 1]] || 0) : null; bodyHtml += renderAmtChg(amt, prevAmt); });
     bodyHtml += '<td class="col-amount" style="font-weight:800;color:var(--accent)">' + money(data.total) + '</td>';
     bodyHtml += '</tr>';
@@ -1222,15 +1227,6 @@ function renderExpenseAnalysisTable(recs) {
   tbl.querySelectorAll('tr[data-sel-kind]').forEach(tr => {
     tr.addEventListener('click', (e) => {
       const kind = tr.getAttribute('data-sel-kind'), key = tr.getAttribute('data-sel-key');
-
-      if (kind === 'g' && e.target.closest('.group-toggle')) {
-        const gid = tr.getAttribute('data-group');
-        const collapsed = tr.classList.toggle('grp-collapsed');
-        tbl.querySelectorAll('tr[data-group-parent="' + gid + '"]').forEach(row => {
-          row.style.display = collapsed ? 'none' : '';
-        });
-        return;
-      }
 
       if (!e.target.closest('.sel-box')) return;
 
