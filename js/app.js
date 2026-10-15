@@ -19,22 +19,22 @@ const MONTH_DRAWER_COLS = [
 
 let allRecords = [];
 let records    = [];
-let currentFY  = 'ALL';   // derived: the single ticked FY, or 'ALL' when none / several are ticked
-let currentLoc = '';      // derived: the single ticked company, or '' when none / several are ticked
-let selFY  = new Set();   // ticked financial years (numbers)
-let selLoc = new Set();   // ticked companies (keys)
-let fyInitialized = false; // first-load flag: seeds selFY/selLoc to "everything selected"
+let currentFY  = 'ALL';
+let currentLoc = '';
+let selFY  = new Set();
+let selLoc = new Set();
+let fyInitialized = false;
 let allFYs = [];
 let fyMs = null, locMs = null, rptFyMs = null, rptLocMs = null;
 let reportYears = [];
 let reportAllYears = [];
 const ALL_COMPANIES = ['CRIUS', 'CHIROS', 'CRIUS FND'];
-let reportCompanies = [];            // applied
-let reportFYSel = new Set();         // Report tab: ticked FYs (empty = all)
-let reportLocSel = new Set();        // Report tab: ticked companies (empty = all)
-let reportGroups = new Set();        // applied expense-type selection (Particulars)
-let reportAccts  = new Set();        // applied expense-type selection (A/C names)
-let pendingGroups = new Set();       // selected in the table, not applied yet
+let reportCompanies = [];
+let reportFYSel = new Set();
+let reportLocSel = new Set();
+let reportGroups = new Set();
+let reportAccts  = new Set();
+let pendingGroups = new Set();
 let pendingAccts  = new Set();
 let savingsGenerated = false;
 let reviewGenerated  = false;
@@ -72,9 +72,7 @@ const fmt  = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 const fmt2 = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /* ═══════════════════════════════════════════════════════════════════
-   MULTI-SELECT CHECKBOX DROPDOWN (used by Expense Overview + Report)
-   Master checkbox has three states: checked / indeterminate / empty.
-   "Nothing selected" is a real state — the dashboard shows zero data.
+   MULTI-SELECT CHECKBOX DROPDOWN
    ═══════════════════════════════════════════════════════════════════ */
 function syncCurrent() {
   currentFY  = selFY.size === 1 ? String(Array.from(selFY)[0]) : 'ALL';
@@ -263,6 +261,18 @@ function applyClientFilters() {
   if (selLoc.size) filtered = filtered.filter(r => selLoc.has(String(r.locationKey || '').toUpperCase()));
   else             filtered = [];
   records = filtered;
+
+  // Keep the Report tab's filters in lock-step with the dashboard's
+  if (typeof reportFYSel !== 'undefined' && !setsEqual(reportFYSel, selFY)) {
+    reportFYSel = new Set(selFY);
+    if (rptFyMs) rptFyMs.refresh();
+  }
+  if (typeof reportLocSel !== 'undefined' && !setsEqual(reportLocSel, selLoc)) {
+    reportLocSel = new Set(selLoc);
+    if (rptLocMs) rptLocMs.refresh();
+  }
+  syncReportSelection();
+
   renderLayoutForFilter(); renderKPIs(); renderMonthlyBreakdown(); renderFYBreakdown(); applyPivotFilters(); updateResetButton();
   if (document.getElementById('drawer').classList.contains('open')) {
     if (drawerMode === 'ac' || drawerMode === 'particulars') renderDrawer(document.getElementById('drawerSearch').value);
@@ -314,16 +324,17 @@ function getReportRecords(applyTypes) {
 }
 
 function syncReportSelection() {
-  reportYears = reportFYSel.size ? Array.from(reportFYSel).sort((a, b) => a - b) : reportAllYears.slice();
-  reportCompanies = reportLocSel.size ? ALL_COMPANIES.filter(k => reportLocSel.has(k)) : ALL_COMPANIES.slice();
+  reportYears = reportFYSel.size ? Array.from(reportFYSel).sort((a, b) => a - b) : [];
+  reportCompanies = reportLocSel.size ? ALL_COMPANIES.filter(k => reportLocSel.has(k)) : [];
 }
 function initReportFilters() {
-  reportFYSel = new Set(Array.from(reportFYSel).filter(y => reportAllYears.indexOf(y) !== -1));
+  reportFYSel = new Set(selFY);
+  reportLocSel = new Set(selLoc);
   syncReportSelection();
   renderReportFilterUI();
 }
-function reportFiltersActive() { return reportFYSel.size > 0 || reportLocSel.size > 0; }
-function resetReportFilters() { reportFYSel = new Set(); reportLocSel = new Set(); syncReportSelection(); renderReport(); }
+function reportFiltersActive() { return hasActiveFilters(); }
+function resetReportFilters() { resetAllFilters(); }
 
 function renderReportFilterUI() {
   if (rptFyMs) rptFyMs.refresh();
@@ -334,8 +345,16 @@ function renderReportFilterUI() {
   const ap = document.getElementById('rfApplied');
   if (!ap) return;
   const tag = t => '<span class="rf-tag">' + esc(t) + '</span>';
-  const yrs = reportFYSel.size ? reportYears.map(y => tag('FY ' + y)).join('') : tag('All years');
-  const cos = reportLocSel.size ? reportCompanies.map(k => tag(COMPANY_NAMES[k] || k)).join('') : tag('All companies');
+  const allSelFY  = reportFYSel.size > 0 && reportFYSel.size >= allFYs.length;
+  const noSelFY   = reportFYSel.size === 0;
+  const allSelLoc = reportLocSel.size > 0 && reportLocSel.size >= ALL_COMPANIES.length;
+  const noSelLoc  = reportLocSel.size === 0;
+  const yrs = noSelFY  ? tag('No years')
+            : allSelFY ? tag('All years')
+            : reportYears.map(y => tag('FY ' + y)).join('');
+  const cos = noSelLoc  ? tag('No companies')
+            : allSelLoc ? tag('All companies')
+            : reportCompanies.map(k => tag(COMPANY_NAMES[k] || k)).join('');
   const typeNames = Array.from(reportGroups).concat(Array.from(reportAccts));
   let typeHtml = tag('All expense types');
   if (typeNames.length) {
@@ -531,15 +550,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
   rptFyMs = createMultiSelect(document.getElementById('rptFyMs'), {
     allLabel: 'All Years', noneLabel: 'No years', plural: 'years',
-    options: () => reportAllYears.map(y => ({ value: String(y), label: 'FY ' + y })),
+    options: () => allFYs.map(y => ({ value: String(y), label: 'FY ' + y })),
     getSel: () => new Set(Array.from(reportFYSel).map(String)),
-    setSel: sel => { reportFYSel = new Set(Array.from(sel).map(Number)); syncReportSelection(); renderReport(); }
+    setSel: sel => {
+      const numSel = new Set(Array.from(sel).map(Number));
+      selFY = numSel;
+      reportFYSel = new Set(numSel);
+      syncCurrent();
+      syncReportSelection();
+      if (fyMs) fyMs.refresh();
+      if (rptFyMs) rptFyMs.refresh();
+      applyClientFilters();
+    }
   });
   rptLocMs = createMultiSelect(document.getElementById('rptLocMs'), {
     allLabel: 'All Companies', noneLabel: 'No companies', plural: 'companies',
     options: () => ALL_COMPANIES.map(k => ({ value: k, label: COMPANY_NAMES[k] || k })),
     getSel: () => new Set(reportLocSel),
-    setSel: sel => { reportLocSel = new Set(sel); syncReportSelection(); renderReport(); }
+    setSel: sel => {
+      const s = new Set(sel);
+      selLoc = s;
+      reportLocSel = new Set(s);
+      syncCurrent();
+      syncReportSelection();
+      if (locMs) locMs.refresh();
+      if (rptLocMs) rptLocMs.refresh();
+      applyClientFilters();
+    }
   });
   const rptRst = document.getElementById('rptResetBtn');
   if (rptRst) rptRst.addEventListener('click', resetReportFilters);
@@ -586,7 +623,10 @@ function populateFY(years) {
     selLoc = new Set(ALL_COMPANIES);
     fyInitialized = true;
   }
+  reportFYSel  = new Set(selFY);
+  reportLocSel = new Set(selLoc);
   syncCurrent();
+  syncReportSelection();
   if (fyMs)  fyMs.refresh();
   if (locMs) locMs.refresh();
 }
@@ -1178,7 +1218,6 @@ function renderExpenseAnalysisTable(recs) {
     tr.addEventListener('click', (e) => {
       const kind = tr.getAttribute('data-sel-kind'), key = tr.getAttribute('data-sel-key');
 
-      // Expand / collapse — only from the little arrow
       if (kind === 'g' && e.target.closest('.group-toggle')) {
         const gid = tr.getAttribute('data-group');
         const collapsed = tr.classList.toggle('grp-collapsed');
@@ -1188,7 +1227,6 @@ function renderExpenseAnalysisTable(recs) {
         return;
       }
 
-      // Selection happens ONLY when the checkbox itself is clicked.
       if (!e.target.closest('.sel-box')) return;
 
       const set = kind === 'g' ? pendingGroups : pendingAccts;
