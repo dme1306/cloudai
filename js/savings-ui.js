@@ -1,7 +1,7 @@
-/* Savings UI: keep the section minimal and require a fresh generation after filter changes. */
+/* Savings UI: always return to the initial Generate solution state after filter changes. */
 (function () {
   function resetSavingsView() {
-    if (typeof savingsGenerated !== 'undefined') savingsGenerated = false;
+    savingsGenerated = false;
     const results = document.getElementById('rptSavingsResults');
     const grid = document.getElementById('rptSavingsGrid');
     const button = document.querySelector('.gen-btn[data-gen="savings"]');
@@ -13,39 +13,47 @@
     }
   }
 
-  // Override the original renderer so the button label stays simple.
-  if (typeof renderSavingsSection === 'function') {
-    renderSavingsSection = function (recs) {
-      const grid = document.getElementById('rptSavingsGrid');
-      const results = document.getElementById('rptSavingsResults');
-      const button = document.querySelector('.gen-btn[data-gen="savings"]');
-      if (!grid) return;
-      if (!savingsGenerated) {
-        if (results) results.hidden = true;
-        grid.innerHTML = '';
-        if (button) {
-          button.disabled = false;
-          button.textContent = 'Generate solution';
-        }
-        return;
-      }
-      if (results) results.hidden = false;
+  function renderSavingsSection(recs) {
+    const grid = document.getElementById('rptSavingsGrid');
+    const results = document.getElementById('rptSavingsResults');
+    const button = document.querySelector('.gen-btn[data-gen="savings"]');
+    if (!grid) return;
+    if (!savingsGenerated) {
+      if (results) results.hidden = true;
+      grid.innerHTML = '';
       if (button) {
         button.disabled = false;
         button.textContent = 'Generate solution';
       }
-      renderSavingsOpportunities(recs);
-    };
+      return;
+    }
+    if (results) results.hidden = false;
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Generate solution';
+    }
+    renderSavingsOpportunities(recs);
   }
 
-  // Capture filter and expense-type changes before the dashboard's own handlers run.
-  document.addEventListener('change', function (event) {
-    if (event.target.closest('#rptFyMs, #rptLocMs, #fyMs, #locMs')) resetSavingsView();
-  }, true);
+  // Replace the original renderer with the simple one-button version.
+  window.renderSavingsSection = renderSavingsSection;
 
-  document.addEventListener('click', function (event) {
-    if (event.target.closest('#rptResetBtn, #resetBtn, #expApplyBtn, #expClearBtn, #rptUnifiedBody tr[data-unified-account], #expAnalysisTable tr')) {
+  // Reset immediately whenever a year/company checkbox changes.
+  document.addEventListener('change', function (event) {
+    if (event.target.matches('.ms-panel input[type="checkbox"]')) {
       resetSavingsView();
     }
+  }, true);
+
+  // Reset for both Reset buttons and expense/account-group selection changes.
+  document.addEventListener('click', function (event) {
+    if (event.target.closest('#rptResetBtn, #resetBtn, #expApplyBtn, #expClearBtn, [data-unified-account], #expAnalysisTable tr[data-sel-kind]')) {
+      resetSavingsView();
+    }
+  }, true);
+
+  // If the report rerenders after a filter update, keep the initial state hidden.
+  document.addEventListener('click', function (event) {
+    if (event.target.closest('.gen-btn[data-gen="savings"]')) return;
   }, true);
 })();
