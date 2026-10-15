@@ -1055,3 +1055,90 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-body);
   font-size: 12px;
   text-shadow: 0 0 1px rgba(249, 115, 22, .35);
 }
+
+
+/* ── Month-by-Month Expense Analysis: clearer selection + distinct palette ── */
+.panel:has(#expAnalysisTable) {
+  border: 1px solid #b7d8f5;
+  box-shadow: 0 8px 26px rgba(14, 116, 180, .09);
+  overflow: hidden;
+}
+.panel:has(#expAnalysisTable) > .panel-head {
+  background: linear-gradient(110deg, #eaf6ff 0%, #f2f0ff 100%);
+  border-bottom: 1px solid #c9e3fa;
+}
+.panel:has(#expAnalysisTable) > .panel-head .panel-title {
+  color: #174a78;
+  font-size: 15px;
+  font-weight: 800;
+}
+.panel:has(#expAnalysisTable) > .panel-head .panel-sub { color: #526b83; }
+.panel:has(#expAnalysisTable) > .panel-body {
+  background: #f7fbff;
+}
+#expAnalysisTable .exp-type-col {
+  width: 260px;
+  min-width: 220px;
+  max-width: 300px;
+  padding: 10px 16px !important;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: middle;
+}
+#expAnalysisTable tbody .exp-type-col {
+  font-size: 12px;
+  line-height: 1.45;
+}
+#expAnalysisTable .group-row > td {
+  background: #e7f3ff !important;
+  border-top: 1px solid #c7e1f8;
+  border-bottom: 1px solid #d7eafa;
+  color: #174a78;
+  font-weight: 750;
+}
+#expAnalysisTable .acct-row > td {
+  background: #fbfdff;
+}
+#expAnalysisTable .acct-row:nth-child(even) > td {
+  background: #f0f7fd;
+}
+#expAnalysisTable .group-row:hover > td,
+#expAnalysisTable .acct-row:hover > td {
+  background: #dceeff !important;
+}
+#expAnalysisTable .sel-box {
+  width: 17px;
+  height: 17px;
+  min-width: 17px;
+  flex: 0 0 17px;
+  border: 1.8px solid #8aa9c4;
+  border-radius: 5px;
+  background: #fff;
+  margin-right: 10px;
+  vertical-align: middle;
+  box-shadow: 0 1px 2px rgba(15, 50, 80, .08);
+}
+#expAnalysisTable tr.row-sel .sel-box {
+  background: #2563eb;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .13);
+}
+#expAnalysisTable tr.row-sel > td,
+#expAnalysisTable tr.row-sel > td.exp-type-col {
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+}
+#expAnalysisTable tr.row-dim > td.exp-type-col { opacity: .68; }
+#expAnalysisTable .col-amount { font-variant-numeric: tabular-nums; }
+@media (max-width: 768px) {
+  #expAnalysisTable .exp-type-col {
+    min-width: 190px;
+    max-width: 230px;
+    padding: 9px 11px !important;
+  }
+  .panel:has(#expAnalysisTable) > .panel-head {
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+}
