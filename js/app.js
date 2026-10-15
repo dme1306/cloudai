@@ -1079,13 +1079,20 @@ function genPlaceholderHtml(kind, icon, title, desc, label) {
          '<button type="button" class="btn-apply gen-btn" data-gen="' + kind + '">✨ ' + label + '</button></div>';
 }
 function renderSavingsSection(recs) {
-  const grid = document.getElementById('rptSavingsGrid'), sub = document.getElementById('rptSavingsSub');
+  const grid = document.getElementById('rptSavingsGrid');
+  const sub = document.getElementById('rptSavingsSub');
+  const results = document.getElementById('rptSavingsResults');
+  const button = document.querySelector('.gen-btn[data-gen="savings"]');
   if (!grid) return;
   if (!savingsGenerated) {
-    grid.innerHTML = genPlaceholderHtml('savings', '💡', 'Savings plan not generated yet', 'Builds detailed, actionable savings plans from the current selection (' + fmt.format(recs.length) + ' transactions in scope).', 'Generate savings plan');
-    if (sub) sub.textContent = 'Press Generate to analyse the current selection';
+    if (results) results.hidden = true;
+    grid.innerHTML = '';
+    if (sub) sub.textContent = 'Generate a data-based solution for the selected financial year, companies and account groups.';
+    if (button) { button.disabled = false; button.textContent = '✨ Generate solution'; }
     return;
   }
+  if (results) results.hidden = false;
+  if (button) { button.disabled = false; button.textContent = '↻ Regenerate solution'; }
   renderSavingsOpportunities(recs);
 }
 function renderReviewSection(recs) {
