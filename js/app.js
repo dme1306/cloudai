@@ -25,8 +25,6 @@ let reportYears = [];
 let reportAllYears = [];
 const ALL_COMPANIES = ['CRIUS', 'CHIROS', 'CRIUS FND'];
 let reportCompanies = [];            // applied
-let pendingYears = [];               // chosen but not applied yet
-let pendingCompanies = [];
 let reportGroups = new Set();        // applied expense-type selection (Particulars)
 let reportAccts  = new Set();        // applied expense-type selection (A/C names)
 let pendingGroups = new Set();       // selected in the table, not applied yet
@@ -190,7 +188,6 @@ function resetAllFilters() {
 
 function arrEqual(a, b) { const x = a.slice().sort(), y = b.slice().sort(); return x.length === y.length && x.every((v, i) => v === y[i]); }
 function setsEqual(a, b) { if (a.size !== b.size) return false; for (const v of a) if (!b.has(v)) return false; return true; }
-function filtersDirty() { return !arrEqual(pendingYears, reportYears) || !arrEqual(pendingCompanies, reportCompanies); }
 
 /* applyTypes=false → years + companies only (feeds the Expense Analysis table)
    applyTypes=true  → also the applied expense-type selection (feeds everything else) */
@@ -211,18 +208,17 @@ function getReportRecords(applyTypes) {
 
 function initReportFilters() {
   if (!reportCompanies.length) reportCompanies = ALL_COMPANIES.slice();
-  pendingYears = reportYears.slice();
-  pendingCompanies = reportCompanies.slice();
   renderReportFilterUI();
 }
 
+/* Chips select instantly (no Apply button). The summary bar below them is frozen on scroll. */
 function renderReportFilterUI() {
   const yEl = document.getElementById('yearFilterChips');
   const cEl = document.getElementById('companyFilterChips');
   if (!yEl || !cEl) return;
 
   yEl.innerHTML = reportAllYears.length ? reportAllYears.map(y => {
-    const on = pendingYears.indexOf(y) !== -1;
+    const on = reportYears.indexOf(y) !== -1;
     return '<span class="year-chip' + (on ? ' active' : '') + '" data-year="' + y + '" role="button" tabindex="0"><span class="yc-check">' + (on ? '✓' : '+') + '</span> FY ' + y + '</span>';
   }).join('') : '<span style="color:var(--text-muted);font-size:12px">No years available</span>';
   yEl.querySelectorAll('.year-chip').forEach(chip => {
@@ -232,7 +228,7 @@ function renderReportFilterUI() {
   });
 
   cEl.innerHTML = ALL_COMPANIES.map(k => {
-    const on = pendingCompanies.indexOf(k) !== -1;
+    const on = reportCompanies.indexOf(k) !== -1;
     const style = on ? ' style="background:' + COMPANY_COLORS[k] + '"' : '';
     return '<span class="year-chip company-chip' + (on ? ' active' : '') + '" data-company="' + esc(k) + '"' + style + ' role="button" tabindex="0"><span class="yc-check">' + (on ? '✓' : '+') + '</span> ' + esc(COMPANY_NAMES[k]) + '</span>';
   }).join('');
@@ -242,8 +238,9 @@ function renderReportFilterUI() {
     chip.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
   });
 
-  /* what is currently applied */
+  /* frozen summary: what is selected right now */
   const ap = document.getElementById('rfApplied');
+  if (!ap) return;
   const tags = arr => arr.length ? arr.map(t => '<span class="rf-tag">' + esc(t) + '</span>').join('') : '<span class="rf-tag none">none selected</span>';
   const yrs = reportYears.slice().sort((a, b) => a - b).map(y => 'FY ' + y);
   const cos = reportCompanies.map(k => COMPANY_NAMES[k] || k);
@@ -253,44 +250,28 @@ function renderReportFilterUI() {
     const shown = typeNames.slice(0, 3).map(t => '<span class="rf-tag">' + esc(t.length > 28 ? t.slice(0, 26) + '…' : t) + '</span>').join('');
     typeHtml = shown + (typeNames.length > 3 ? '<span class="rf-tag">+' + (typeNames.length - 3) + ' more</span>' : '');
   }
+  const n = getReportRecords(true).length;
   ap.innerHTML =
-    '<span class="rf-group"><span class="rf-glabel">Applied years</span>' + tags(yrs) + '</span>' +
+    '<span class="rf-group"><span class="rf-glabel">Years</span>' + tags(yrs) + '</span>' +
     '<span class="rf-group"><span class="rf-glabel">Companies</span>' + tags(cos) + '</span>' +
-    '<span class="rf-group"><span class="rf-glabel">Expense types</span>' + typeHtml + '</span>';
-
-  const dirty = filtersDirty();
-  const pend = document.getElementById('rfPending');
-  if (pend) pend.classList.toggle('d-none', !dirty);
-  const btn = document.getElementById('rfApplyBtn');
-  if (btn) {
-    const valid = pendingYears.length > 0 && pendingCompanies.length > 0;
-    btn.disabled = !dirty || !valid;
-    btn.title = !valid ? 'Select at least one year and one company' : '';
-  }
+    '<span class="rf-group"><span class="rf-glabel">Expense types</span>' + typeHtml + '</span>' +
+    '<span class="rf-count">' + fmt.format(n) + ' transactions</span>';
 }
 function toggleReportYear(y) {
-  const i = pendingYears.indexOf(y);
-  if (i === -1) pendingYears.push(y); else pendingYears.splice(i, 1);
-  pendingYears.sort((a, b) => a - b);
-  renderReportFilterUI();
-}
-function toggleReportCompany(k) {
-  const i = pendingCompanies.indexOf(k);
-  if (i === -1) pendingCompanies.push(k); else pendingCompanies.splice(i, 1);
-  renderReportFilterUI();
-}
-function selectAllReportYears()  { pendingYears = reportAllYears.slice(); renderReportFilterUI(); }
-function clearReportYears()      { pendingYears = []; renderReportFilterUI(); }
-function selectAllCompanies()    { pendingCompanies = ALL_COMPANIES.slice(); renderReportFilterUI(); }
-function clearCompanies()        { pendingCompanies = []; renderReportFilterUI(); }
-
-function applyReportFilters() {
-  if (!pendingYears.length || !pendingCompanies.length) return;
-  reportYears = pendingYears.slice().sort((a, b) => a - b);
-  reportCompanies = pendingCompanies.slice();
-  savingsGenerated = false; reviewGenerated = false;
+  const i = reportYears.indexOf(y);
+  if (i === -1) reportYears.push(y); else reportYears.splice(i, 1);
+  reportYears.sort((a, b) => a - b);
   renderReport();
 }
+function toggleReportCompany(k) {
+  const i = reportCompanies.indexOf(k);
+  if (i === -1) reportCompanies.push(k); else reportCompanies.splice(i, 1);
+  renderReport();
+}
+function selectAllReportYears() { reportYears = reportAllYears.slice(); renderReport(); }
+function clearReportYears()     { reportYears = []; renderReport(); }
+function selectAllCompanies()   { reportCompanies = ALL_COMPANIES.slice(); renderReport(); }
+function clearCompanies()       { reportCompanies = []; renderReport(); }
 
 /* ── expense-type selection (Looker-style cross filter) ── */
 function refreshExpSelClasses() {
@@ -312,12 +293,10 @@ function updateExpSelUI() {
 }
 function applyExpSelection() {
   reportGroups = new Set(pendingGroups); reportAccts = new Set(pendingAccts);
-  savingsGenerated = false; reviewGenerated = false;
   renderReport();
 }
 function clearExpSelection() {
   pendingGroups = new Set(); pendingAccts = new Set(); reportGroups = new Set(); reportAccts = new Set();
-  savingsGenerated = false; reviewGenerated = false;
   renderReport();
 }
 
@@ -1978,7 +1957,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
   on('cfSelectAll', selectAllCompanies);
   on('cfClearAll', clearCompanies);
-  on('rfApplyBtn', applyReportFilters);
+  on('rfJump', function () { window.scrollTo({ top: 0, behavior: 'smooth' }); });
   on('expApplyBtn', applyExpSelection);
   on('expClearBtn', clearExpSelection);
 
@@ -1995,4 +1974,16 @@ document.addEventListener('DOMContentLoaded', function () {
       else { reviewGenerated = true; renderReviewSection(recs); }
     }, 60);
   });
+});
+
+
+/* Keep the frozen summary bar just under the (sticky) header */
+document.addEventListener('DOMContentLoaded', function () {
+  const tb = document.querySelector('.topbar');
+  if (!tb) return;
+  const setH = () => document.documentElement.style.setProperty('--topbar-h', tb.offsetHeight + 'px');
+  setH();
+  window.addEventListener('resize', setH);
+  window.addEventListener('load', setH);
+  if (window.ResizeObserver) new ResizeObserver(setH).observe(tb);
 });
