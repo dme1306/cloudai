@@ -1,0 +1,2 @@
+/* Clean report tables: show the table name without verbose metadata captions. */
+#fySub, #monthlySub, #tableSub, #expTableSub, #rptUnifiedSub { display: none !important; }
