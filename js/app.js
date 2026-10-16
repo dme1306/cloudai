@@ -1372,6 +1372,16 @@ function renderSavingsOpportunities(recs) {
   }
   const total = recs.reduce((s, r) => s + r.expenseAmount, 0);
   const opps = [];
+  const scopeYears = Array.from(new Set(recs.map(r => Number(r.financialYear)).filter(Boolean))).sort((a, b) => a - b);
+  const scopeCompanies = Array.from(new Set(recs.map(r => String(r.locationKey || '').toUpperCase()).filter(Boolean)))
+    .sort((a, b) => (COMPANY_ORDER[a] ?? 99) - (COMPANY_ORDER[b] ?? 99))
+    .map(k => COMPANY_NAMES[k] || k);
+  const scopeExpenseTypes = Array.from(new Set(Array.from(reportGroups).concat(Array.from(reportAccts))));
+  const scopeText = [
+    scopeYears.length ? (scopeYears.length === 1 ? 'FY ' + scopeYears[0] : 'FY ' + scopeYears[0] + '–' + scopeYears[scopeYears.length - 1]) : 'No financial year',
+    scopeCompanies.length ? scopeCompanies.join(', ') : 'No company',
+    scopeExpenseTypes.length ? scopeExpenseTypes.join(', ') : 'All expense types'
+  ].map(esc);
 
   const acctAll = {};
   recs.forEach(r => { const k = r.category || 'Uncategorized'; acctAll[k] = (acctAll[k] || 0) + r.expenseAmount; });
@@ -1601,32 +1611,63 @@ function renderSavingsOpportunities(recs) {
 
   const sevRank = { high: 0, med: 1, low: 2 };
   opps.sort((a, b) => { const r = (sevRank[a.sev] || 3) - (sevRank[b.sev] || 3); return r !== 0 ? r : (b.amt || 0) - (a.amt || 0); });
-  if (sub) sub.textContent = opps.length ? opps.length + ' detailed savings plan' + (opps.length === 1 ? '' : 's') + ' detected — highest impact first. Each card shows the numbers and a step-by-step action plan.' : 'No savings signals in the current selection.';
+  if (sub) sub.textContent = opps.length
+    ? opps.length + ' findings based on the selected data. Start with the first recommendation and review the suggested actions.'
+    : 'No clear cost-saving warning was found in the selected data. You can still review the largest expenses below.';
 
-  grid.innerHTML = opps.slice(0, 6).map(o => {
-    const amtHtml = (o.amt && o.amt > 0) ? '<div class="rpt-opp-amt-badge">save up to ' + money(o.amt) + '</div>' : '';
+  const summaryHtml =
+    '<div class="rpt-opp low" style="grid-column:1/-1">' +
+      '<div class="rpt-opp-head"><div class="rpt-opp-title-wrap">' +
+        '<div class="rpt-opp-eyebrow">📌 SUMMARY OF YOUR SELECTION</div>' +
+        '<div class="rpt-opp-title">Where the money is going</div>' +
+      '</div><div class="rpt-opp-amt-badge">' + money(total) + ' total expenses</div></div>' +
+      '<div class="rpt-opp-metrics">' +
+        '<div class="rpt-opp-metric"><span class="rpt-opp-metric-label">Transactions checked</span><span class="rpt-opp-metric-value">' + fmt.format(recs.length) + '</span></div>' +
+        '<div class="rpt-opp-metric"><span class="rpt-opp-metric-label">Financial year(s)</span><span class="rpt-opp-metric-value">' + scopeText[0] + '</span></div>' +
+        '<div class="rpt-opp-metric"><span class="rpt-opp-metric-label">Company</span><span class="rpt-opp-metric-value">' + scopeText[1] + '</span></div>' +
+        '<div class="rpt-opp-metric"><span class="rpt-opp-metric-label">Expense filter</span><span class="rpt-opp-metric-value">' + scopeText[2] + '</span></div>' +
+      '</div>' +
+      '<div class="rpt-opp-section"><div class="rpt-opp-section-label">How to use these suggestions</div>' +
+      '<div class="rpt-opp-body">Each item explains what the data shows and what you can check next. Any rupee amount labelled as a target is an estimate for review—not a guaranteed saving. Confirm invoices, business needs and supplier quotes before making changes.</div></div>' +
+    '</div>';
+
+  const tagLabels = {
+    'Concentration Risk': 'Spending concentrated in a few accounts',
+    'Largest Account': 'Highest-spend account',
+    'Company Spend': 'Company with highest spend',
+    'Fastest Growing': 'Biggest year-to-year increase',
+    'Compounding Upward': 'Long-term spending trend',
+    'Trending Down': 'Long-term spending trend',
+    'Category Concentration': 'Highest-spend expense type',
+    'Anomalous Month': 'Month with unusually high spending'
+  };
+
+  grid.innerHTML = summaryHtml + (opps.length ? opps.slice(0, 6).map(o => {
+    const amtHtml = (o.amt && o.amt > 0)
+      ? '<div class="rpt-opp-amt-badge">Possible saving target: ' + money(o.amt) + '</div>'
+      : '';
     const metricsHtml = o.metrics && o.metrics.length
       ? '<div class="rpt-opp-metrics">' + o.metrics.map(m => '<div class="rpt-opp-metric"><span class="rpt-opp-metric-label">' + esc(m.label) + '</span><span class="rpt-opp-metric-value' + (m.up ? ' up' : '') + (m.down ? ' down' : '') + '">' + m.value + '</span></div>').join('') + '</div>'
       : '';
     const actionsHtml = o.actions && o.actions.length
-      ? '<div class="rpt-opp-section"><div class="rpt-opp-section-label"><span class="lbl-ico">✅</span> Action plan</div><ul class="rpt-opp-actions">' + o.actions.map(a => '<li>' + a + '</li>').join('') + '</ul></div>'
+      ? '<div class="rpt-opp-section"><div class="rpt-opp-section-label"><span class="lbl-ico">✅</span> What you can do next</div><ul class="rpt-opp-actions">' + o.actions.map(a => '<li>' + a + '</li>').join('') + '</ul></div>'
       : '';
     return '<div class="rpt-opp ' + o.sev + '">' +
       '<div class="rpt-opp-head">' +
         '<div class="rpt-opp-title-wrap">' +
-          '<div class="rpt-opp-eyebrow">' + (o.icon || '') + ' ' + esc(o.tag) + '</div>' +
+          '<div class="rpt-opp-eyebrow">' + (o.icon || '') + ' ' + esc(tagLabels[o.tag] || o.tag) + '</div>' +
           '<div class="rpt-opp-title">' + o.title + '</div>' +
         '</div>' +
         amtHtml +
       '</div>' +
       metricsHtml +
       '<div class="rpt-opp-section">' +
-        '<div class="rpt-opp-section-label"><span class="lbl-ico">📋</span> What we found</div>' +
+        '<div class="rpt-opp-section-label"><span class="lbl-ico">📋</span> What the data shows</div>' +
         '<div class="rpt-opp-body">' + o.body + '</div>' +
       '</div>' +
       actionsHtml +
     '</div>';
-  }).join('');
+  }).join('') : '<div class="rpt-opp low" style="grid-column:1/-1"><div class="rpt-opp-title">No major warning found</div><div class="rpt-opp-body">The selected records do not show a clear unusual increase or concentration. To find savings, review the largest expense accounts and compare supplier prices before approving purchases.</div></div>');
 }
 
 function rptYearlyAgg(recs) {
