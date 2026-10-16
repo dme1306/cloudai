@@ -1615,6 +1615,28 @@ function renderSavingsOpportunities(recs) {
     ? opps.length + ' findings based on the selected data. Start with the first recommendation and review the suggested actions.'
     : 'No clear cost-saving warning was found in the selected data. You can still review the largest expenses below.';
 
+  const monthsInScope = new Set(recs.map(r => monthKey(r)).filter(k => k && k !== 'Unknown')).size || 1;
+  const savingPlanRows = acctSorted.slice(0, 5).map(([name, spend], index) => {
+    const targetRate = index < 3 ? 0.05 : 0.03;
+    const target = spend * targetRate;
+    const monthlySpend = spend / monthsInScope;
+    const monthlyTarget = target / monthsInScope;
+    const actions = [
+      'Check the 5 largest bills and confirm quantity, price and business need.',
+      'Get 2–3 comparable supplier quotations before the next purchase.',
+      'Combine orders where practical and negotiate a volume or annual rate.',
+      'Set a review limit of ' + money(monthlySpend) + ' per month; investigate any overspend.'
+    ];
+    return '<div class="rpt-opp-metric" style="padding:12px;min-width:0">' +
+      '<span class="rpt-opp-metric-label">Priority ' + (index + 1) + ': ' + esc(name) + '</span>' +
+      '<span class="rpt-opp-metric-value">' + money(spend) + ' current spend</span>' +
+      '<span class="rpt-opp-metric-label">Review target: ' + (targetRate * 100).toFixed(0) + '% = ' + money(target) + '</span>' +
+      '<span class="rpt-opp-metric-label">Equivalent monthly target: ' + money(monthlyTarget) + '</span>' +
+      '<ul class="rpt-opp-actions">' + actions.map(a => '<li>' + esc(a) + '</li>').join('') + '</ul>' +
+      '<span class="rpt-opp-metric-label">Target only — confirm feasibility with actual invoices and supplier quotes.</span>' +
+    '</div>';
+  }).join('');
+
   const summaryHtml =
     '<div class="rpt-opp low" style="grid-column:1/-1">' +
       '<div class="rpt-opp-head"><div class="rpt-opp-title-wrap">' +
@@ -1627,8 +1649,11 @@ function renderSavingsOpportunities(recs) {
         '<div class="rpt-opp-metric"><span class="rpt-opp-metric-label">Company</span><span class="rpt-opp-metric-value">' + scopeText[1] + '</span></div>' +
         '<div class="rpt-opp-metric"><span class="rpt-opp-metric-label">Expense filter</span><span class="rpt-opp-metric-value">' + scopeText[2] + '</span></div>' +
       '</div>' +
-      '<div class="rpt-opp-section"><div class="rpt-opp-section-label">How to use these suggestions</div>' +
-      '<div class="rpt-opp-body">Each item explains what the data shows and what you can check next. Any rupee amount labelled as a target is an estimate for review—not a guaranteed saving. Confirm invoices, business needs and supplier quotes before making changes.</div></div>' +
+      '<div class="rpt-opp-section"><div class="rpt-opp-section-label">Your practical cost-reduction plan</div>' +
+      '<div class="rpt-opp-body">Start with the largest expense accounts below. These steps focus on reducing purchase cost, not just reporting that spending is high.</div>' +
+      '<div class="rpt-opp-metrics" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">' + (savingPlanRows || '<div class="rpt-opp-body">No account-level spend is available for a savings plan.</div>') + '</div></div>' +
+      '<div class="rpt-opp-section"><div class="rpt-opp-section-label">Important</div>' +
+      '<div class="rpt-opp-body">Savings figures are review targets, not guaranteed savings. Confirm invoices, quality requirements, supplier quotations and business needs before acting. Do not cut essential or compliance-related spending without the responsible team\'s approval.</div></div>' +
     '</div>';
 
   const tagLabels = {
