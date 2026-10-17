@@ -10,7 +10,7 @@ window.APP_CONFIG = {
   API_BASE_URL: '',
   ALLOWED_LOCATIONS: ['CRIUS', 'CHIROS', 'CRIUS FND'],
 
-  /* ── Groq AI ──────────────────────────────────────────────────── ──────────────────────────────────────────────────── */
+  /* ── Groq AI (configure only if using the client-side AI feature) ── */
   GROQ_API_KEY:   '',
   PRIMARY_MODEL:  'openai/gpt-oss-120b',
   FALLBACK_MODEL: 'openai/gpt-oss-20b',
