@@ -1396,16 +1396,6 @@ function renderSavingsOpportunities(recs) {
     scopeExpenseTypes.length ? scopeExpenseTypes.join(', ') : 'All expense types'
   ].map(esc);
 
-  // Estimates are planning scenarios, not guaranteed savings.
-  const savingsSummary = '<div class="rpt-opp med savings-summary" style="grid-column:1/-1">' +
-    '<div class="rpt-opp-head"><div class="rpt-opp-title-wrap"><div class="rpt-opp-eyebrow">💡 Savings target · ' + scopeText.join(' · ') + '</div>' +
-    '<div class="rpt-opp-title">A practical opportunity to save ' + money(conservativeSaving) + '–' + money(targetSaving) + '</div></div></div>' +
-    '<div class="rpt-opp-body">Based on selected expenses of <b>' + money(total) + '</b>, a 3% reduction would save about <b>' + money(conservativeSaving) + '</b> and a 5% reduction would save about <b>' + money(targetSaving) + '</b> over the selected period. These are estimates, not guaranteed savings.</div>' +
-    '<div class="rpt-opp-metrics"><div><span>Selected spend</span><b>' + money(total) + '</b></div><div><span>3% scenario</span><b>' + money(conservativeSaving) + '</b></div><div><span>5% target</span><b>' + money(targetSaving) + '</b></div><div><span>Monthly equivalent*</span><b>' + money(conservativeSaving / Math.max(1, new Set(recs.map(r => r.monthYear || (r.month + '-' + r.financialYear))).size)) + '</b></div></div>' +
-    '<div class="rpt-opp-body"><b>Start here:</b> review the highest-spend account, compare vendor rates, remove duplicate or nonessential purchases, and set a monthly budget with an owner. *Monthly equivalent divides the 3% scenario by the number of distinct months in the selected records.</div></div>';
-  grid.innerHTML = savingsSummary;
-
-
   const acctAll = {};
   recs.forEach(r => { const k = r.category || 'Uncategorized'; acctAll[k] = (acctAll[k] || 0) + r.expenseAmount; });
   const acctSorted = Object.entries(acctAll).sort((a, b) => b[1] - a[1]);
@@ -1671,6 +1661,9 @@ function renderSavingsOpportunities(recs) {
         '<div class="rpt-opp-metric"><span class="rpt-opp-metric-label">Financial year(s)</span><span class="rpt-opp-metric-value">' + scopeText[0] + '</span></div>' +
         '<div class="rpt-opp-metric"><span class="rpt-opp-metric-label">Company</span><span class="rpt-opp-metric-value">' + scopeText[1] + '</span></div>' +
         '<div class="rpt-opp-metric"><span class="rpt-opp-metric-label">Expense filter</span><span class="rpt-opp-metric-value">' + scopeText[2] + '</span></div>' +
+        '<div class="rpt-opp-metric"><span class="rpt-opp-metric-label">3% savings scenario</span><span class="rpt-opp-metric-value">' + money(conservativeSaving) + '</span></div>' +
+        '<div class="rpt-opp-metric"><span class="rpt-opp-metric-label">5% savings target</span><span class="rpt-opp-metric-value">' + money(targetSaving) + '</span></div>' +
+        '<div class="rpt-opp-metric"><span class="rpt-opp-metric-label">Months in selection</span><span class="rpt-opp-metric-value">' + new Set(recs.map(r => r.monthYear || (r.month + '-' + r.financialYear))).size + '</span></div>' +
       '</div>' +
       '<div class="rpt-opp-section"><div class="rpt-opp-section-label">Your practical cost-reduction plan</div>' +
       '<div class="rpt-opp-body">Start with the largest expense accounts below. These steps focus on reducing purchase cost, not just reporting that spending is high.</div>' +
