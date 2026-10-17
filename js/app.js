@@ -904,8 +904,9 @@ function openFYDrawer(fy, loc) {
 function renderFYDrawer(query) {
   const q = (query || '').trim().toLowerCase();
   const targetYear = drawerParticularYear, locFilter = drawerFYCompany;
-  let fyRecords = records.filter(r => Number(r.financialYear) === targetYear);
+  let fyRecords = allRecords.filter(r => Number(r.financialYear) === targetYear);
   if (locFilter) fyRecords = fyRecords.filter(r => String(r.locationKey || '').toUpperCase() === locFilter);
+  else if (selLoc.size && selLoc.size < ALL_COMPANIES.length) fyRecords = fyRecords.filter(r => selLoc.has(String(r.locationKey || '').toUpperCase()));
   if (!fyRecords.length) { document.getElementById('drawerSub').textContent = '0 records'; document.getElementById('drawerBody').innerHTML = '<div style="text-align:center;padding:60px 20px;font-size:13px;line-height:1.7"><div style="font-size:34px;margin-bottom:14px">📭</div><b style="font-size:14px">No data found for this selection.</b></div>'; return; }
   const monthTotals = {}; let yearTotal = 0;
   fyRecords.forEach(r => { const key = monthKey(r); monthTotals[key] = (monthTotals[key] || 0) + r.expenseAmount; yearTotal += r.expenseAmount; });
@@ -979,7 +980,8 @@ function renderDrawer(query) {
 function renderParticularDrawer(query) {
   const q = (query || '').trim().toLowerCase();
   const targetYear = drawerParticularYear;
-  let partRecords = records.filter(r => Number(r.financialYear) === targetYear);
+  let partRecords = allRecords.filter(r => Number(r.financialYear) === targetYear);
+  if (selLoc.size && selLoc.size < ALL_COMPANIES.length) partRecords = partRecords.filter(r => selLoc.has(String(r.locationKey || '').toUpperCase()));
   if (drawerParticular) partRecords = partRecords.filter(r => (r.particulars || 'Uncategorized') === drawerParticular);
   if (!partRecords.length) { document.getElementById('drawerSub').textContent = '0 records'; document.getElementById('drawerBody').innerHTML = '<div style="text-align:center;padding:60px 20px;font-size:13px;line-height:1.7"><div style="font-size:34px;margin-bottom:14px">📭</div><b style="font-size:14px">No data found for FY ' + targetYear + '.</b></div>'; return; }
   // Group by actual Month-Year instead of the numeric month field.
@@ -1372,6 +1374,8 @@ function renderSavingsOpportunities(recs) {
   }
   const total = recs.reduce((s, r) => s + r.expenseAmount, 0);
   const opps = [];
+  const conservativeSaving = total * 0.03;
+  const targetSaving = total * 0.05;
   const scopeYears = Array.from(new Set(recs.map(r => Number(r.financialYear)).filter(Boolean))).sort((a, b) => a - b);
   const scopeCompanies = Array.from(new Set(recs.map(r => String(r.locationKey || '').toUpperCase()).filter(Boolean)))
     .sort((a, b) => (COMPANY_ORDER[a] ?? 99) - (COMPANY_ORDER[b] ?? 99))
@@ -1382,6 +1386,16 @@ function renderSavingsOpportunities(recs) {
     scopeCompanies.length ? scopeCompanies.join(', ') : 'No company',
     scopeExpenseTypes.length ? scopeExpenseTypes.join(', ') : 'All expense types'
   ].map(esc);
+
+  // Estimates are planning scenarios, not guaranteed savings.
+  const savingsSummary = '<div class="rpt-opp med savings-summary" style="grid-column:1/-1">' +
+    '<div class="rpt-opp-head"><div class="rpt-opp-title-wrap"><div class="rpt-opp-eyebrow">💡 Savings target · ' + scopeText.join(' · ') + '</div>' +
+    '<div class="rpt-opp-title">A practical opportunity to save ' + money(conservativeSaving) + '–' + money(targetSaving) + '</div></div></div>' +
+    '<div class="rpt-opp-body">Based on selected expenses of <b>' + money(total) + '</b>, a 3% reduction would save about <b>' + money(conservativeSaving) + '</b> and a 5% reduction would save about <b>' + money(targetSaving) + '</b> over the selected period. These are estimates, not guaranteed savings.</div>' +
+    '<div class="rpt-opp-metrics"><div><span>Selected spend</span><b>' + money(total) + '</b></div><div><span>3% scenario</span><b>' + money(conservativeSaving) + '</b></div><div><span>5% target</span><b>' + money(targetSaving) + '</b></div><div><span>Monthly equivalent*</span><b>' + money(conservativeSaving / Math.max(1, new Set(recs.map(r => r.monthYear || (r.month + '-' + r.financialYear))).size)) + '</b></div></div>' +
+    '<div class="rpt-opp-body"><b>Start here:</b> review the highest-spend account, compare vendor rates, remove duplicate or nonessential purchases, and set a monthly budget with an owner. *Monthly equivalent divides the 3% scenario by the number of distinct months in the selected records.</div></div>';
+  grid.innerHTML = savingsSummary;
+
 
   const acctAll = {};
   recs.forEach(r => { const k = r.category || 'Uncategorized'; acctAll[k] = (acctAll[k] || 0) + r.expenseAmount; });
