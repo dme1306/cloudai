@@ -929,7 +929,7 @@ function renderFYDrawer(query) {
   if (!visibleMonths.length) { body.innerHTML = '<p style="color:var(--text-muted);font-size:13px;text-align:center;padding:60px 20px">' + (q ? 'No months match "' + esc(q) + '"' : 'No data available.') + '</p>'; return; }
   let html = '<div class="particular-hero"><div><div class="hero-label">FY ' + targetYear + ' · ' + esc(companyLabel) + '</div><div class="hero-value">' + money(visibleTotal) + '</div></div><div class="hero-badge">📅 ' + visibleMonths.length + ' month' + (visibleMonths.length === 1 ? '' : 's') + '</div></div><div class="drawer-section-header"><span>Month-wise</span><span class="section-total">' + money(visibleTotal) + '</span></div>';
   visibleMonths.forEach(key => {
-    const amt = monthTotals[key], meta = parseMonthYear(key), monthName = MONTH_ABBR[(meta.m || 0) - 1] || key;
+    const amt = monthTotals[key] || 0, meta = parseMonthYear(key), monthName = MONTH_ABBR[(meta.m || 0) - 1] || key;
     const barW = (amt / maxAmt) * 100, share = yearTotal ? (amt / yearTotal * 100) : 0;
     html += '<div class="drawer-month-row" data-fy-drawer-month="' + esc(key) + '" data-fy-drawer-m="' + (meta.m || '') + '" style="cursor:pointer"><div><div class="month-name"><span class="month-badge">' + esc(monthName) + '</span> ' + esc(key) + '</div><div class="bar"><div style="width:' + barW.toFixed(2) + '%"></div></div></div><div><div class="amt">' + money(amt) + '</div><div class="pct">' + share.toFixed(1) + '%</div></div></div>';
   });
