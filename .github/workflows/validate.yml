@@ -1,0 +1,26 @@
+name: Validate dashboard JavaScript
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, secure-backend-dashboard-ui]
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Validate JavaScript syntax
+        run: |
+          node --check js/config.js
+          node --check js/data.js
+          node --check js/ai.js
+          node --check js/app.js
+          node --check js/savings-ui.js
+          node --check api/dashboard.js
