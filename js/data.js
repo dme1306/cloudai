@@ -8,7 +8,6 @@
   const MONTH_MAP  = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
   const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const DATA_CACHE_KEY  = 'crius_sheet_cache_v1';
-  const TOKEN_CACHE_KEY = 'crius_gtoken_v1';
 
   /* ── parsing helpers (same logic as Code1.gs) ─────────────────── */
   const cell = (row, i) => (i >= 0 && row[i] !== undefined && row[i] !== null) ? row[i] : '';
@@ -94,75 +93,30 @@
                    month: COL_MONTH, amount: COL_AMT, fy: COL_FY, monthYear: COL_MY } };
   }
 
-  /* ── Google service-account sign-in (JWT signed in the browser) ── */
-  const enc = new TextEncoder();
-  function b64url(bytes) {
-    bytes = new Uint8Array(bytes);
-    let bin = '';
-    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  }
-
-  async function getAccessToken() {
-    const now = Math.floor(Date.now() / 1000);
-    try {
-      const c = JSON.parse(sessionStorage.getItem(TOKEN_CACHE_KEY) || 'null');
-      if (c && c.exp > now + 60) return c.token;
-    } catch (e) {}
-
-    if (!window.crypto || !window.crypto.subtle)
-      throw new Error('WebCrypto unavailable — the site must be opened over https:// (GitHub Pages is fine).');
-
-    const sa = CFG.SERVICE_ACCOUNT;
-    const header = b64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
-    const claim  = b64url(enc.encode(JSON.stringify({
-      iss: sa.CLIENT_EMAIL,
-      scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
-      aud: 'https://oauth2.googleapis.com/token',
-      iat: now, exp: now + 3600
-    })));
-
-    const pem = String(sa.PRIVATE_KEY)
-      .replace(/\\n/g, '\n')
-      .replace(/-----[A-Z ]+-----/g, '')
-      .replace(/\s+/g, '');
-    let der;
-    try { der = Uint8Array.from(atob(pem), c => c.charCodeAt(0)); }
-    catch (e) { throw new Error('PRIVATE_KEY in js/config.js is not valid — paste the full private_key from the JSON file.'); }
-
-    const key = await crypto.subtle.importKey(
-      'pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
-    const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(header + '.' + claim));
-    const jwt = header + '.' + claim + '.' + b64url(sig);
-
-    const r = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'grant_type=' + encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer') + '&assertion=' + jwt
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.access_token)
-      throw new Error('Google sign-in failed: ' + (j.error_description || j.error || ('HTTP ' + r.status)));
-
-    const exp = now + (j.expires_in || 3600);
-    try { sessionStorage.setItem(TOKEN_CACHE_KEY, JSON.stringify({ token: j.access_token, exp: exp })); } catch (e) {}
-    return j.access_token;
-  }
-
+  /* ── Secure backend fetch: no Google credentials in the browser ── */
   async function fetchSheetValues() {
-    const token = await getAccessToken();
-    const range = encodeURIComponent("'" + CFG.SHEET_NAME + "'");
-    const url = 'https://sheets.googleapis.com/v4/spreadsheets/' + CFG.SHEET_ID +
-                '/values/' + range + '?valueRenderOption=FORMATTED_VALUE';
-    const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      const msg = (j.error && j.error.message) || ('HTTP ' + r.status);
-      if (r.status === 403 || r.status === 404)
-        throw new Error('Sheets API ' + r.status + ': ' + msg + ' — is the sheet shared with the service-account email as Viewer, and is the Sheets API enabled?');
-      throw new Error('Sheets API ' + r.status + ': ' + msg);
+    const base = String(CFG.API_BASE_URL || '').trim().replace(/\/+$/, '');
+    if (!base || /YOUR-VERCEL|REPLACE-WITH/i.test(base)) {
+      throw new Error('Secure data backend is not configured yet. Deploy the /api/dashboard endpoint to Vercel, add the required server-side environment variables, then set API_BASE_URL in js/config.js to your Vercel deployment URL.');
     }
-    return j.values || [];
+    let response;
+    try {
+      response = await fetch(base + '/api/dashboard', {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        cache: 'no-store'
+      });
+    } catch (error) {
+      throw new Error('Could not reach the secure expense data backend. Check the Vercel deployment and allowed origin.');
+    }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || ('Secure data backend returned HTTP ' + response.status));
+    }
+    if (!Array.isArray(payload.values)) {
+      throw new Error('Secure data backend response is missing the spreadsheet values.');
+    }
+    return payload.values;
   }
 
   /* ── public function used by app.js ───────────────────────────── */
