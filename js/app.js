@@ -208,6 +208,15 @@ function parseMonthYear(s) {
   if (m) return { y: parseInt(m[1],10), m: parseInt(m[2],10) };
   return { y: 9999, m: 0 };
 }
+function fiscalMonthKeys(fy) {
+  // Indian financial year: April through March. Include zero-spend months so
+  // a year drill-down always presents the complete 12-month period.
+  return Array.from({ length: 12 }, (_, i) => {
+    const month = ((i + 3) % 12) + 1;
+    const year = month >= 4 ? Number(fy) : Number(fy) + 1;
+    return MONTH_ABBR[month - 1] + ' ' + year;
+  });
+}
 function monthKey(r) { if (r.monthYear) return r.monthYear; if (r.month >= 1 && r.month <= 12) return MONTH_ABBR[r.month-1] + ' ' + r.financialYear; return 'Unknown'; }
 function monthKeySort(a, b) { const pa = parseMonthYear(a), pb = parseMonthYear(b); return (pa.y - pb.y) || (pa.m - pb.m); }
 function fyRangeLabel() {
@@ -910,7 +919,7 @@ function renderFYDrawer(query) {
   if (!fyRecords.length) { document.getElementById('drawerSub').textContent = '0 records'; document.getElementById('drawerBody').innerHTML = '<div style="text-align:center;padding:60px 20px;font-size:13px;line-height:1.7"><div style="font-size:34px;margin-bottom:14px">📭</div><b style="font-size:14px">No data found for this selection.</b></div>'; return; }
   const monthTotals = {}; let yearTotal = 0;
   fyRecords.forEach(r => { const key = monthKey(r); monthTotals[key] = (monthTotals[key] || 0) + r.expenseAmount; yearTotal += r.expenseAmount; });
-  const monthKeys = Object.keys(monthTotals).sort(monthKeySort);
+  const monthKeys = Array.from(new Set(fiscalMonthKeys(targetYear).concat(Object.keys(monthTotals)))).sort(monthKeySort);
   const visibleMonths = monthKeys.filter(key => !q || key.toLowerCase().includes(q) || (MONTH_ABBR[(parseMonthYear(key).m || 0) - 1] || '').toLowerCase().includes(q));
   const visibleTotal = visibleMonths.reduce((sum, key) => sum + monthTotals[key], 0);
   let maxAmt = 1; monthKeys.forEach(key => { if (monthTotals[key] > maxAmt) maxAmt = monthTotals[key]; });
@@ -987,7 +996,7 @@ function renderParticularDrawer(query) {
   // Group by actual Month-Year instead of the numeric month field.
   const monthTotals = {}; let yearTotal = 0;
   partRecords.forEach(r => { const key = monthKey(r); monthTotals[key] = (monthTotals[key] || 0) + r.expenseAmount; yearTotal += r.expenseAmount; });
-  const monthKeys = Object.keys(monthTotals).sort(monthKeySort);
+  const monthKeys = Array.from(new Set(fiscalMonthKeys(targetYear).concat(Object.keys(monthTotals)))).sort(monthKeySort);
   const visibleMonths = monthKeys.filter(key => !q || key.toLowerCase().includes(q) || (MONTH_ABBR[(parseMonthYear(key).m || 0) - 1] || '').toLowerCase().includes(q));
   const visibleTotal = visibleMonths.reduce((sum, key) => sum + monthTotals[key], 0);
   let maxAmt = 1; monthKeys.forEach(key => { if (monthTotals[key] > maxAmt) maxAmt = monthTotals[key]; });
